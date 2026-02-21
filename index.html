@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sam Fit | Mind. Body. Movement.</title>
+    
+    <link rel="icon" type="image/png" href="favicon.png">
+    <link rel="apple-touch-icon" href="favicon.png">
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400&family=Playfair+Display:ital,wght@0,700;1,700&display=swap" rel="stylesheet">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <link href="https://assets.calendly.com/assets/external/widget.css" rel="stylesheet">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
+    <style>
+        /* Base styling and background gradient */
+        body {
+            margin: 0;
+            overflow-x: hidden;
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            background: linear-gradient(135deg, #fcfcfc 0%, #e0e0e0 100%);
+            color: #1a1a1a;
+        }
+
+        /* Custom Fonts */
+        .font-playfair { font-family: 'Playfair Display', serif; }
+        .font-inter { font-family: 'Inter', sans-serif; }
+
+        /* WebGL Canvas fixed to background */
+        #webgl-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* Glassmorphism utility class */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.45);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.7);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.05);
+        }
+
+        /* Hide scrollbar for cleaner look but keep functionality */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(0,0,0,0.2);
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="antialiased flex flex-col min-h-screen">
+
+    <canvas id="webgl-canvas"></canvas>
+
+    <nav class="fixed top-0 w-full px-4 py-4 md:px-8 md:py-6 flex justify-between items-center z-50">
+        
+        <div class="h-16 w-16 md:h-24 md:w-24 cursor-pointer flex-shrink-0 flex items-center"> 
+            <img src="logo.png" alt="Sam Fit Logo" 
+                 class="h-full w-full object-contain scale-[1.35] md:scale-100 origin-left hover:scale-[1.45] md:hover:scale-110 transition-transform duration-300" 
+                 onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+            <span style="display:none;" class="font-black text-3xl tracking-tighter text-gray-900 drop-shadow-md">SF</span>
+        </div>
+
+        <button onclick="Calendly.initPopupWidget({url: 'https://calendly.com/samfit/30min'}); return false;" 
+                class="px-5 py-2 md:px-8 md:py-3 border-2 border-gray-900 bg-gray-900 text-white rounded-full text-sm md:text-base font-bold tracking-wide hover:bg-transparent hover:text-gray-900 transition-colors duration-300 shadow-lg whitespace-nowrap">
+            Book Now
+        </button>
+        
+    </nav>
+
+    <main class="relative z-10 w-full flex-grow flex flex-col items-center pt-28 md:pt-32 px-6 md:px-12">
+        
+        <section class="min-h-[80vh] flex flex-col justify-center items-center text-center w-full max-w-5xl">
+            <h1 class="text-5xl md:text-7xl font-playfair italic font-bold tracking-wide mb-4 drop-shadow-sm text-gray-800">
+                Sam Fit
+            </h1>
+            <h2 class="text-5xl md:text-8xl font-black tracking-tighter uppercase mb-6 drop-shadow-sm text-gray-900">
+                Mind. Body.<br>Movement.
+            </h2>
+            <p class="text-lg md:text-xl text-gray-800 mb-10 max-w-lg font-medium">
+                Consistency is your only limit. Join a community built on effort, focus, and action.
+            </p>
+            
+            <a href="https://wa.me/96170216463?text=Hello,%20what%20are%20the%20type%20of%20classes%20do%20you%20teach?" target="_blank" rel="noopener noreferrer" 
+               class="glass-card px-10 py-4 rounded-full text-lg font-bold text-gray-900 hover:bg-white/80 transition-all duration-300 flex items-center gap-2 shadow-lg">
+                Join Now 
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+            </a>
+        </section>
+
+        <section class="min-h-screen flex flex-col justify-center items-center w-full max-w-6xl py-20">
+            <h2 class="text-3xl md:text-5xl font-bold mb-12 uppercase tracking-tight text-center text-gray-900">Training Programs</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 w-full">
+                
+                <div class="glass-card p-8 rounded-3xl text-center flex flex-col items-center hover:-translate-y-2 transition-transform duration-300">
+                    <h3 class="text-2xl font-black uppercase tracking-tight text-gray-900 mb-4">CrossFit</h3>
+                    <p class="text-sm md:text-base text-gray-600 font-inter font-light leading-relaxed">High-intensity functional movements to build ultimate strength and conditioning.</p>
+                </div>
+
+                <div class="glass-card p-8 rounded-3xl text-center flex flex-col items-center hover:-translate-y-2 transition-transform duration-300">
+                    <h3 class="text-2xl font-black uppercase tracking-tight text-gray-900 mb-4">Tae Bo</h3>
+                    <p class="text-sm md:text-base text-gray-600 font-inter font-light leading-relaxed">An energetic fusion of martial arts and cardio kickboxing to shred calories.</p>
+                </div>
+
+                <div class="glass-card p-8 rounded-3xl text-center flex flex-col items-center hover:-translate-y-2 transition-transform duration-300">
+                    <h3 class="text-2xl font-black uppercase tracking-tight text-gray-900 mb-4">Fitness</h3>
+                    <p class="text-sm md:text-base text-gray-600 font-inter font-light leading-relaxed">Overall endurance, core stabilization, and comprehensive body sculpting.</p>
+                </div>
+
+                <div class="glass-card p-8 rounded-3xl text-center flex flex-col items-center hover:-translate-y-2 transition-transform duration-300">
+                    <h3 class="text-2xl font-black uppercase tracking-tight text-gray-900 mb-4">Stretching</h3>
+                    <p class="text-sm md:text-base text-gray-600 font-inter font-light leading-relaxed">Active recovery focused on flexibility, mobility, and muscle relaxation.</p>
+                </div>
+
+            </div>
+        </section>
+
+        <section class="flex flex-col justify-center items-center w-full max-w-6xl pb-20">
+            <div class="glass-card rounded-3xl p-8 md:p-16 w-full text-center shadow-xl">
+                <h2 class="text-3xl md:text-5xl font-bold mb-12 uppercase tracking-tight text-gray-900">Class Schedule</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 text-left">
+                    <div class="border-l-4 border-gray-800 pl-6">
+                        <h3 class="text-xl font-bold text-gray-600 uppercase tracking-widest mb-2">Mon / Wed / Fri</h3>
+                        <p class="text-3xl md:text-5xl font-black text-gray-900">7:00 PM <span class="text-2xl md:text-3xl font-medium text-gray-500">- 8:00 PM</span></p>
+                    </div>
+                    <div class="border-l-4 border-gray-800 pl-6">
+                        <h3 class="text-xl font-bold text-gray-600 uppercase tracking-widest mb-2">Tue / Thu / Sat</h3>
+                        <p class="text-3xl md:text-5xl font-black text-gray-900">9:00 AM <span class="text-2xl md:text-3xl font-medium text-gray-500">- 10:00 AM</span></p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="flex flex-col justify-center w-full max-w-6xl py-20">
+            <h2 class="text-3xl md:text-5xl font-bold mb-12 uppercase tracking-tight text-center text-gray-900">The Standard</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="glass-card rounded-2xl overflow-hidden aspect-[4/5] group relative shadow-lg">
+                    <img src="workout-action.jpg" alt="Workout Action" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100%\' height=\'100%\'><rect width=\'100%\' height=\'100%\' fill=\'%23cbd5e1\'/></svg>'">
+                    <div class="absolute inset-0 bg-black/20 flex items-end p-6">
+                        <span class="text-white font-bold tracking-widest uppercase drop-shadow-md">Action</span>
+                    </div>
+                </div>
+                <div class="glass-card rounded-2xl overflow-hidden aspect-[4/5] group relative md:-translate-y-8 shadow-lg">
+                    <img src="nutrition-plate.jpg" alt="Nutrition" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100%\' height=\'100%\'><rect width=\'100%\' height=\'100%\' fill=\'%2394a3b8\'/></svg>'">
+                    <div class="absolute inset-0 bg-black/20 flex items-end p-6">
+                        <span class="text-white font-bold tracking-widest uppercase drop-shadow-md">Fuel</span>
+                    </div>
+                </div>
+                <div class="glass-card rounded-2xl overflow-hidden aspect-[4/5] group relative shadow-lg">
+                    <img src="mindset-stretch.jpg" alt="Mindset and Stretching" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100%\' height=\'100%\'><rect width=\'100%\' height=\'100%\' fill=\'%23cbd5e1\'/></svg>'">
+                    <div class="absolute inset-0 bg-black/20 flex items-end p-6">
+                        <span class="text-white font-bold tracking-widest uppercase drop-shadow-md">Focus</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="flex flex-col justify-center w-full max-w-6xl py-20 pb-32">
+            <h2 class="text-3xl md:text-5xl font-bold mb-12 uppercase tracking-tight text-center text-gray-900">Just Move.</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="glass-card rounded-2xl overflow-hidden aspect-[4/5] group relative shadow-lg">
+                    <img src="move-1.jpg" alt="Just Move 1" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100%\' height=\'100%\'><rect width=\'100%\' height=\'100%\' fill=\'%2394a3b8\'/></svg>'">
+                </div>
+                <div class="glass-card rounded-2xl overflow-hidden aspect-[4/5] group relative md:-translate-y-8 shadow-lg">
+                    <img src="move-2.jpg" alt="Just Move 2" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100%\' height=\'100%\'><rect width=\'100%\' height=\'100%\' fill=\'%23cbd5e1\'/></svg>'">
+                </div>
+                <div class="glass-card rounded-2xl overflow-hidden aspect-[4/5] group relative shadow-lg">
+                    <img src="move-3.jpg" alt="Just Move 3" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100%\' height=\'100%\'><rect width=\'100%\' height=\'100%\' fill=\'%2394a3b8\'/></svg>'">
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="relative z-10 w-full text-center py-8 bg-transparent">
+        <p class="text-sm md:text-base font-bold text-gray-700 tracking-wide font-inter">
+            &copy; 2026 Samfit. All rights reserved.
+        </p>
+    </footer>
+
+    <script src="https://assets.calendly.com/assets/external/widget.js" type="text/javascript" async></script>
+
+    <script>
+        // 1. Scene Setup
+        const canvas = document.querySelector('#webgl-canvas');
+        const scene = new THREE.Scene();
+        
+        // 2. Camera Setup
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 0, 8); // Start slightly further back
+
+        // 3. Renderer Setup (Transparent background for CSS gradient, Antialiased)
+        const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Optimize for high-res displays
+
+        // 4. Geometry & Material (Minimalist sleek weight plate / Torus)
+        const geometry = new THREE.TorusGeometry(2, 0.6, 64, 100);
+        
+        // Concrete & Metal feel material
+        const material = new THREE.MeshPhysicalMaterial({
+            color: 0x9ca3af, // Cool grey concrete color
+            metalness: 0.15,
+            roughness: 0.65,
+            clearcoat: 0.1,
+            clearcoatRoughness: 0.4,
+        });
+
+        const shape = new THREE.Mesh(geometry, material);
+        shape.rotation.x = Math.PI / 4;
+        shape.rotation.y = Math.PI / 4;
+        scene.add(shape);
+
+        // 5. Lighting Setup (Bright Studio setup)
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7); // Soft fill
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5); // Main key light
+        directionalLight.position.set(5, 5, 2);
+        scene.add(directionalLight);
+
+        const rimLight = new THREE.PointLight(0xf8fafc, 2); // Subtle rim light
+        rimLight.position.set(-5, 5, -5);
+        scene.add(rimLight);
+
+        // 6. Animation Variables
+        const clock = new THREE.Clock();
+        
+        // 7. Render Loop with "Breathing" Camera
+        function tick() {
+            const elapsedTime = clock.getElapsedTime();
+
+            // Slow rotation of the object
+            shape.rotation.x += 0.002;
+            shape.rotation.y += 0.003;
+
+            // Subtle breathing effect on camera Y axis
+            camera.position.y = Math.sin(elapsedTime * 0.5) * 0.2;
+
+            renderer.render(scene, camera);
+            window.requestAnimationFrame(tick);
+        }
+        tick();
+
+        // 8. Handle Window Resize dynamically
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        });
+
+        // 9. GSAP Scroll Animation
+        // Modifies the Z position and rotation of the 3D shape based on scroll
+        window.addEventListener('scroll', () => {
+            const scrollY = window.scrollY;
+            const maxScroll = document.body.scrollHeight - window.innerHeight;
+            const scrollProgress = scrollY / maxScroll;
+
+            // Push object back and rotate it as user scrolls
+            gsap.to(shape.position, {
+                z: -scrollProgress * 5, // moves it backward
+                duration: 0.5,
+                ease: "power1.out"
+            });
+            
+            gsap.to(shape.rotation, {
+                z: scrollProgress * Math.PI, // spins it
+                duration: 0.5,
+                ease: "power1.out"
+            });
+        });
+    </script>
+</body>
+</html>
