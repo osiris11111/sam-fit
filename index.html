@@ -4,14 +4,22 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sam Fit | Mind. Body. Movement.</title>
-    <meta name="description" content="Join a community built on effort, focus, and action. Premier CrossFit, Tae Bo, and Fitness classes in Lebanon.">
-    <meta name="keywords" content="Sam Fit, Fitness, CrossFit, Tae Bo, Gym, Workout, Personal Training, Lebanon">
+    
+    <meta name="description" content="Transform your body with Coach Samo at Sam Fit. Premier CrossFit, Tae Bo, and Personal Training in Lebanon. Join a community built on effort, focus, and action.">
+    <meta name="keywords" content="Sam Fit, Fitness, CrossFit, Tae Bo, Gym, Workout, Personal Training, Coach Samo, Lebanon">
     <meta name="robots" content="index, follow">
+    
     <meta property="og:title" content="Sam Fit | Mind. Body. Movement.">
-    <meta property="og:description" content="Join a community built on effort, focus, and action.">
+    <meta property="og:description" content="Transform your body with Coach Samo. Premier CrossFit, Tae Bo, and Personal Training in Lebanon. Book your class today!">
     <meta property="og:image" content="https://samfit.co/social-preview.jpg">
     <meta property="og:url" content="https://samfit.co">
     <meta property="og:type" content="website">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Sam Fit | Mind. Body. Movement.">
+    <meta name="twitter:description" content="Premier CrossFit, Tae Bo, and Personal Training in Lebanon. Join the community.">
+    <meta name="twitter:image" content="https://samfit.co/social-preview.jpg">
+
     <link rel="icon" type="image/png" href="/favicon.png">
     <link rel="apple-touch-icon" href="/favicon.png">
 
@@ -48,7 +56,6 @@
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.3); border-radius: 4px; }
         
-        /* Preloader Styles */
         #preloader { transition: opacity 0.8s ease-out, visibility 0.8s ease-out; }
         .fade-out-loader { opacity: 0; visibility: hidden; pointer-events: none; }
     </style>
@@ -185,12 +192,10 @@
             const preloader = document.getElementById('preloader');
             const body = document.getElementById('body-container');
             
-            // Give Three.js a tiny moment to render the first frame before revealing
             setTimeout(() => {
                 preloader.classList.add('fade-out-loader');
-                body.classList.remove('overflow-hidden'); // Allow scrolling again
+                body.classList.remove('overflow-hidden');
                 
-                // Remove from DOM completely after fade out
                 setTimeout(() => {
                     preloader.style.display = 'none';
                 }, 800);
