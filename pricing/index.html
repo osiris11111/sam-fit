@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pricing & Schedule | Sam Fit</title>
+    <meta name="robots" content="index, follow">
+    <link rel="icon" type="image/png" href="/favicon.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-VQERYW2QDQ"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-VQERYW2QDQ');
+
+      function trackButtonClick(buttonName) {
+        gtag('event', 'conversion', { 'send_to': 'G-VQERYW2QDQ', 'event_label': buttonName, 'value': 1.0 });
+        if(buttonName === 'Calendly Book Now') gtag('event', 'calendly_click');
+      }
+    </script>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Playfair+Display:ital,wght@0,700;1,700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://assets.calendly.com/assets/external/widget.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
+    <style>
+        body { margin: 0; overflow-x: hidden; font-family: 'Inter', sans-serif; background: linear-gradient(135deg, #fcfcfc 0%, #e0e0e0 100%); color: #000000; }
+        .font-playfair { font-family: 'Playfair Display', serif; }
+        #webgl-canvas { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: -1; pointer-events: none; }
+        .glass-card { background: rgba(255, 255, 255, 0.55); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.8); box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.05); }
+    </style>
+</head>
+<body class="antialiased flex flex-col min-h-screen text-black">
+    <canvas id="webgl-canvas"></canvas>
+
+    <nav class="fixed top-0 w-full px-4 py-4 md:px-8 md:py-6 flex justify-between items-center z-50">
+        <a href="/" class="h-16 w-16 md:h-24 md:w-24 cursor-pointer flex-shrink-0 flex items-center"> 
+            <img src="/logo.png" alt="Sam Fit Logo" class="h-full w-full object-contain scale-[1.35] md:scale-100 origin-left hover:scale-[1.45] md:hover:scale-110 transition-transform duration-300">
+        </a>
+        <button onclick="trackButtonClick('Calendly Book Now'); Calendly.initPopupWidget({url: 'https://calendly.com/samfit/30min'}); return false;" 
+                class="px-5 py-2 md:px-8 md:py-3 border-2 border-black bg-black text-white rounded-full text-sm md:text-base font-bold tracking-wide hover:bg-transparent hover:text-black transition-colors duration-300 shadow-lg whitespace-nowrap">
+            Book Now
+        </button>
+    </nav>
+
+    <main class="relative z-10 w-full flex-grow flex flex-col items-center pt-32 px-6 md:px-12 pb-20">
+        
+        <div class="relative w-full max-w-6xl h-48 md:h-80 rounded-3xl overflow-hidden mb-16 shadow-xl border border-white/50">
+            <img src="/pricing-banner.jpg" alt="Sam Fit Gym" class="w-full h-full object-cover">
+            
+            <div class="absolute inset-0 flex items-center justify-center px-4">
+                <h1 class="text-2xl sm:text-3xl md:text-5xl font-black tracking-tighter uppercase text-black text-center whitespace-nowrap drop-shadow-[0_4px_8px_rgba(255,255,255,0.6)]">Pricing & Schedule</h1>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-6xl">
+            
+            <div class="glass-card p-10 rounded-3xl text-center flex flex-col justify-between hover:-translate-y-2 transition-transform duration-300 shadow-lg border-t-4 border-t-black">
+                <div>
+                    <h3 class="text-2xl font-black uppercase mb-2 text-black">Mon / Wed / Fri</h3>
+                    <p class="text-lg text-black font-semibold mb-8">9:00 AM - 10:00 AM</p>
+                </div>
+                <p class="text-6xl font-black text-black">$50<span class="text-xl font-medium text-black">/month</span></p>
+            </div>
+
+            <div class="glass-card p-10 rounded-3xl text-center flex flex-col justify-between hover:-translate-y-2 transition-transform duration-300 shadow-lg border-t-4 border-t-black">
+                <div>
+                    <h3 class="text-2xl font-black uppercase mb-2 text-black">Mon / Wed / Fri</h3>
+                    <p class="text-lg text-black font-semibold mb-8">7:00 PM - 8:00 PM</p>
+                </div>
+                <p class="text-6xl font-black text-black">$50<span class="text-xl font-medium text-black">/month</span></p>
+            </div>
+
+            <div class="glass-card p-10 rounded-3xl text-center flex flex-col justify-between hover:-translate-y-2 transition-transform duration-300 shadow-lg bg-black/5 border-t-4 border-t-black">
+                <div>
+                    <h3 class="text-2xl font-black uppercase mb-2 text-black">Personal Training</h3>
+                    <p class="text-lg text-black font-semibold mb-8">Custom Schedule</p>
+                </div>
+                <p class="text-6xl font-black text-black">$20<span class="text-xl font-medium text-black">/session</span></p>
+            </div>
+
+        </div>
+
+        <div class="mt-16">
+            <a href="/" class="text-black font-bold hover:underline flex items-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg> Back to Home
+            </a>
+        </div>
+
+    </main>
+
+    <footer class="relative z-10 w-full text-center py-8">
+        <p class="text-sm md:text-base font-bold text-black tracking-wide">&copy; 2026 Samfit. All rights reserved.</p>
+    </footer>
+
+    <script src="https://assets.calendly.com/assets/external/widget.js" type="text/javascript" async></script>
+    <script>
+        const canvas = document.querySelector('#webgl-canvas');
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 0, 8);
+        const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+        const geometry = new THREE.TorusGeometry(2, 0.6, 64, 100);
+        const material = new THREE.MeshPhysicalMaterial({ color: 0x9ca3af, metalness: 0.15, roughness: 0.65, clearcoat: 0.1 });
+        const shape = new THREE.Mesh(geometry, material);
+        scene.add(shape);
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.5); dirLight.position.set(5, 5, 2); scene.add(dirLight);
+
+        const clock = new THREE.Clock();
+        function tick() {
+            const t = clock.getElapsedTime();
+            shape.rotation.x += 0.002; shape.rotation.y += 0.003;
+            camera.position.y = Math.sin(t * 0.5) * 0.2;
+            renderer.render(scene, camera); window.requestAnimationFrame(tick);
+        }
+        tick();
+
+        window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+        window.addEventListener('scroll', () => { const p = window.scrollY / (document.body.scrollHeight - window.innerHeight); gsap.to(shape.position, { z: -p * 5, duration: 0.5 }); gsap.to(shape.rotation, { z: p * Math.PI, duration: 0.5 }); });
+    </script>
+</body>
+</html>
