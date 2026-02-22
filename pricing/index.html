@@ -7,6 +7,9 @@
     <meta name="robots" content="index, follow">
     <link rel="icon" type="image/png" href="/favicon.png">
 
+    <link rel="preload" href="https://assets.calendly.com/assets/external/widget.js" as="script">
+    <link rel="preload" href="https://assets.calendly.com/assets/external/widget.css" as="style">
+
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-VQERYW2QDQ"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
@@ -33,9 +36,20 @@
         .font-playfair { font-family: 'Playfair Display', serif; }
         #webgl-canvas { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: -1; pointer-events: none; }
         .glass-card { background: rgba(255, 255, 255, 0.55); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.8); box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.05); }
+        
+        /* Preloader Styles */
+        #preloader { transition: opacity 0.8s ease-out, visibility 0.8s ease-out; }
+        .fade-out-loader { opacity: 0; visibility: hidden; pointer-events: none; }
     </style>
 </head>
-<body class="antialiased flex flex-col min-h-screen text-black">
+<body class="antialiased flex flex-col min-h-screen text-black overflow-hidden" id="body-container">
+    
+    <div id="preloader" class="fixed inset-0 z-[9999] bg-[#fcfcfc] flex flex-col items-center justify-center">
+        <div class="h-20 w-20 md:h-28 md:w-28 animate-pulse">
+            <img src="/logo.png" alt="Loading Sam Fit..." class="h-full w-full object-contain">
+        </div>
+    </div>
+
     <canvas id="webgl-canvas"></canvas>
 
     <nav class="fixed top-0 w-full px-4 py-4 md:px-8 md:py-6 flex justify-between items-center z-50">
@@ -100,6 +114,21 @@
 
     <script src="https://assets.calendly.com/assets/external/widget.js" type="text/javascript" async></script>
     <script>
+        // Preloader Logic
+        window.addEventListener('load', () => {
+            const preloader = document.getElementById('preloader');
+            const body = document.getElementById('body-container');
+            
+            setTimeout(() => {
+                preloader.classList.add('fade-out-loader');
+                body.classList.remove('overflow-hidden');
+                
+                setTimeout(() => {
+                    preloader.style.display = 'none';
+                }, 800);
+            }, 500);
+        });
+
         const canvas = document.querySelector('#webgl-canvas');
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
