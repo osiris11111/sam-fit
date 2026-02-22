@@ -4,16 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sam Fit | Mind. Body. Movement.</title>
-    <meta name="description" content="Consistency is your only limit. Join a community built on effort, focus, and action. Premier CrossFit, Tae Bo, and Fitness classes in Lebanon.">
+    <meta name="description" content="Join a community built on effort, focus, and action. Premier CrossFit, Tae Bo, and Fitness classes in Lebanon.">
     <meta name="keywords" content="Sam Fit, Fitness, CrossFit, Tae Bo, Gym, Workout, Personal Training, Lebanon">
     <meta name="robots" content="index, follow">
     <meta property="og:title" content="Sam Fit | Mind. Body. Movement.">
-    <meta property="og:description" content="Consistency is your only limit. Join a community built on effort, focus, and action.">
+    <meta property="og:description" content="Join a community built on effort, focus, and action.">
     <meta property="og:image" content="https://samfit.co/social-preview.jpg">
     <meta property="og:url" content="https://samfit.co">
     <meta property="og:type" content="website">
     <link rel="icon" type="image/png" href="/favicon.png">
     <link rel="apple-touch-icon" href="/favicon.png">
+
+    <link rel="preload" href="https://assets.calendly.com/assets/external/widget.js" as="script">
+    <link rel="preload" href="https://assets.calendly.com/assets/external/widget.css" as="style">
 
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-VQERYW2QDQ"></script>
     <script>
@@ -64,7 +67,7 @@
         <section class="min-h-[80vh] flex flex-col justify-center items-center text-center w-full max-w-5xl">
             <h1 class="text-6xl md:text-7xl font-playfair italic font-bold tracking-wide mb-4 text-black">Sam Fit</h1>
             <h2 class="text-5xl md:text-8xl font-black tracking-tighter uppercase mb-6 text-black">Mind. Body.<br>Movement.</h2>
-            <p class="text-lg md:text-xl text-black mb-10 max-w-lg font-semibold">Consistency is your only limit. Join a community built on effort, focus, and action.</p>
+            <p class="text-lg md:text-xl text-black mb-10 max-w-lg font-semibold">Join a community built on effort, focus, and action.</p>
             
             <a href="https://wa.me/96170224767?text=Hello,%20what%20are%20the%20type%20of%20classes%20do%20you%20teach?" 
                onclick="trackButtonClick('WhatsApp Join Now')" target="_blank" rel="noopener noreferrer" 
@@ -79,7 +82,7 @@
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 w-full">
                 <div class="glass-card p-8 rounded-3xl text-center flex flex-col items-center hover:-translate-y-2 transition-transform duration-300">
                     <h3 class="text-2xl font-black uppercase mb-4 text-black">CrossFit</h3>
-                    <p class="text-base text-black font-medium">High-intensity functional movements to build ultimate strength and conditioning.</p>
+                    <p class="text-base text-black font-medium">High-intensity functional movements to build strength and conditioning.</p>
                 </div>
                 <div class="glass-card p-8 rounded-3xl text-center flex flex-col items-center hover:-translate-y-2 transition-transform duration-300">
                     <h3 class="text-2xl font-black uppercase mb-4 text-black">Tae Bo</h3>
@@ -127,7 +130,7 @@
             </div>
         </section>
 
-        <section class="w-full max-w-6xl py-20 pb-32">
+        <section class="w-full max-w-6xl py-20 pb-10">
             <h2 class="text-3xl md:text-5xl font-bold mb-12 uppercase tracking-tight text-center text-black">Just Move.</h2>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div class="glass-card rounded-2xl overflow-hidden aspect-[4/5] shadow-lg"><img src="/move-1.jpg" class="w-full h-full object-cover"></div>
@@ -135,7 +138,30 @@
                 <div class="glass-card rounded-2xl overflow-hidden aspect-[4/5] shadow-lg"><img src="/move-3.jpg" class="w-full h-full object-cover"></div>
             </div>
         </section>
+
+        <div class="w-full flex justify-center pb-20 pt-6">
+            <button id="about-us-btn" class="px-8 py-3 bg-transparent border-2 border-black rounded-full text-xl font-bold text-black cursor-pointer hover:bg-black hover:text-white transition-colors duration-300 tracking-wide shadow-sm">
+                About Us
+            </button>
+        </div>
     </main>
+
+    <div id="about-modal" class="fixed inset-0 z-[100] flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300">
+        <div id="about-backdrop" class="absolute inset-0 bg-black/40 backdrop-blur-sm cursor-pointer"></div>
+        
+        <div id="about-content" class="relative glass-card p-10 md:p-14 rounded-3xl max-w-2xl w-full mx-6 shadow-2xl transform scale-95 transition-transform duration-300">
+            <button id="close-modal" class="absolute top-6 right-6 text-black hover:scale-110 transition-transform">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+            <h3 class="text-4xl md:text-5xl font-playfair italic font-bold mb-6 text-black text-center">About Us</h3>
+            
+            <div class="text-lg md:text-xl text-black font-medium leading-relaxed text-center space-y-3">
+                <p>For over six years, Coach Samo has proudly led the Sam Fit community, guiding countless women toward achieving their unique body goals.</p>
+                <p>As a dedicated professional, Coach Samo holds comprehensive certifications across fitness, personal training, meditation, and foundational nutrition.</p>
+                <p>This deep expertise ensures every class is built on safe, effective, and balanced practices.</p>
+            </div>
+        </div>
+    </div>
 
     <footer class="relative z-10 w-full text-center py-8">
         <p class="text-sm md:text-base font-bold text-black tracking-wide">&copy; 2026 Samfit. All rights reserved.</p>
@@ -143,6 +169,7 @@
 
     <script src="https://assets.calendly.com/assets/external/widget.js" type="text/javascript" async></script>
     <script>
+        // 3D Canvas Logic
         const canvas = document.querySelector('#webgl-canvas');
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
@@ -170,6 +197,29 @@
 
         window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
         window.addEventListener('scroll', () => { const p = window.scrollY / (document.body.scrollHeight - window.innerHeight); gsap.to(shape.position, { z: -p * 5, duration: 0.5 }); gsap.to(shape.rotation, { z: p * Math.PI, duration: 0.5 }); });
+
+        // About Us Modal Logic
+        const aboutBtn = document.getElementById('about-us-btn');
+        const aboutModal = document.getElementById('about-modal');
+        const aboutBackdrop = document.getElementById('about-backdrop');
+        const closeModalBtn = document.getElementById('close-modal');
+        const aboutContent = document.getElementById('about-content');
+
+        function openModal() {
+            aboutModal.classList.remove('opacity-0', 'pointer-events-none');
+            aboutContent.classList.remove('scale-95');
+            aboutContent.classList.add('scale-100');
+        }
+
+        function closeModal() {
+            aboutModal.classList.add('opacity-0', 'pointer-events-none');
+            aboutContent.classList.remove('scale-100');
+            aboutContent.classList.add('scale-95');
+        }
+
+        aboutBtn.addEventListener('click', openModal);
+        closeModalBtn.addEventListener('click', closeModal);
+        aboutBackdrop.addEventListener('click', closeModal);
     </script>
 </body>
 </html>
