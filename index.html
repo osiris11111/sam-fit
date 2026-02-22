@@ -46,7 +46,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://assets.calendly.com/assets/external/widget.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
 
     <style>
         body { margin: 0; overflow-x: hidden; font-family: 'Inter', sans-serif; background: linear-gradient(135deg, #fcfcfc 0%, #e0e0e0 100%); color: #000000; }
@@ -202,7 +201,7 @@
             }, 500);
         });
 
-        // 3D Canvas Logic
+        // 3D Canvas Logic & Mobile Scroll Optimization
         const canvas = document.querySelector('#webgl-canvas');
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
@@ -219,17 +218,33 @@
         scene.add(new THREE.AmbientLight(0xffffff, 0.7));
         const dirLight = new THREE.DirectionalLight(0xffffff, 1.5); dirLight.position.set(5, 5, 2); scene.add(dirLight);
 
+        // Smooth Scroll Logic
+        let currentScrollProgress = 0;
+        let targetScrollProgress = 0;
+
+        window.addEventListener('scroll', () => {
+            const maxScroll = Math.max(1, document.body.scrollHeight - window.innerHeight);
+            targetScrollProgress = window.scrollY / maxScroll;
+        });
+
         const clock = new THREE.Clock();
         function tick() {
             const t = clock.getElapsedTime();
-            shape.rotation.x += 0.002; shape.rotation.y += 0.003;
+            shape.rotation.x += 0.002; 
+            shape.rotation.y += 0.003;
             camera.position.y = Math.sin(t * 0.5) * 0.2;
-            renderer.render(scene, camera); window.requestAnimationFrame(tick);
+
+            // Highly performant, lag-free hardware interpolation
+            currentScrollProgress += (targetScrollProgress - currentScrollProgress) * 0.1;
+            shape.position.z = -currentScrollProgress * 5;
+            shape.rotation.z = currentScrollProgress * Math.PI;
+
+            renderer.render(scene, camera); 
+            window.requestAnimationFrame(tick);
         }
         tick();
 
         window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
-        window.addEventListener('scroll', () => { const p = window.scrollY / (document.body.scrollHeight - window.innerHeight); gsap.to(shape.position, { z: -p * 5, duration: 0.5 }); gsap.to(shape.rotation, { z: p * Math.PI, duration: 0.5 }); });
 
         // About Us Modal Logic
         const aboutBtn = document.getElementById('about-us-btn');
