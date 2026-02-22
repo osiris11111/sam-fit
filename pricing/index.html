@@ -4,7 +4,22 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pricing & Schedule | Sam Fit</title>
+    
+    <meta name="description" content="Transform your body with Coach Samo at Sam Fit. Premier CrossFit, Tae Bo, and Personal Training in Lebanon. Book your class today!">
+    <meta name="keywords" content="Sam Fit, Fitness, CrossFit, Tae Bo, Gym, Workout, Personal Training, Coach Samo, Lebanon">
     <meta name="robots" content="index, follow">
+    
+    <meta property="og:title" content="Pricing & Schedule | Sam Fit">
+    <meta property="og:description" content="Transform your body with Coach Samo. Premier CrossFit, Tae Bo, and Personal Training in Lebanon. Book your class today!">
+    <meta property="og:image" content="https://samfit.co/social-preview.jpg">
+    <meta property="og:url" content="https://samfit.co/pricing/">
+    <meta property="og:type" content="website">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Pricing & Schedule | Sam Fit">
+    <meta name="twitter:description" content="Premier CrossFit, Tae Bo, and Personal Training in Lebanon. Join the community.">
+    <meta name="twitter:image" content="https://samfit.co/social-preview.jpg">
+
     <link rel="icon" type="image/png" href="/favicon.png">
 
     <link rel="preload" href="https://assets.calendly.com/assets/external/widget.js" as="script">
@@ -19,6 +34,7 @@
 
       function trackButtonClick(buttonName) {
         gtag('event', 'conversion', { 'send_to': 'G-VQERYW2QDQ', 'event_label': buttonName, 'value': 1.0 });
+        if(buttonName === 'WhatsApp Join Now') gtag('event', 'whatsapp_click');
         if(buttonName === 'Calendly Book Now') gtag('event', 'calendly_click');
       }
     </script>
@@ -37,7 +53,6 @@
         #webgl-canvas { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: -1; pointer-events: none; }
         .glass-card { background: rgba(255, 255, 255, 0.55); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.8); box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.05); }
         
-        /* Preloader Styles */
         #preloader { transition: opacity 0.8s ease-out, visibility 0.8s ease-out; }
         .fade-out-loader { opacity: 0; visibility: hidden; pointer-events: none; }
     </style>
@@ -72,7 +87,7 @@
             </div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-6xl">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-6xl mb-12">
             
             <div class="glass-card p-10 rounded-3xl text-center flex flex-col justify-between hover:-translate-y-2 transition-transform duration-300 shadow-lg border-t-4 border-t-black">
                 <div>
@@ -100,7 +115,16 @@
 
         </div>
 
-        <div class="mt-16">
+        <div class="w-full flex justify-center mb-8">
+            <a href="https://wa.me/96170224767?text=Hello,%20what%20are%20the%20type%20of%20classes%20do%20you%20teach?" 
+               onclick="trackButtonClick('WhatsApp Join Now')" target="_blank" rel="noopener noreferrer" 
+               class="px-10 py-4 bg-transparent border-2 border-black rounded-full text-xl font-bold text-black hover:bg-black hover:text-white transition-all duration-300 flex items-center gap-2 shadow-sm">
+                Join Now 
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+            </a>
+        </div>
+
+        <div class="mt-24">
             <a href="/" class="text-black font-bold hover:underline flex items-center gap-2">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg> Back to Home
             </a>
@@ -114,7 +138,6 @@
 
     <script src="https://assets.calendly.com/assets/external/widget.js" type="text/javascript" async></script>
     <script>
-        // Preloader Logic
         window.addEventListener('load', () => {
             const preloader = document.getElementById('preloader');
             const body = document.getElementById('body-container');
