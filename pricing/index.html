@@ -46,7 +46,6 @@
     <link href="https://assets.calendly.com/assets/external/widget.css" rel="stylesheet">
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
     <style>
@@ -150,7 +149,6 @@
                 
                 setTimeout(() => {
                     preloader.style.display = 'none';
-                    ScrollTrigger.refresh();
                 }, 800);
             }, 500);
         });
@@ -180,36 +178,13 @@
         }
         tick();
 
-        window.addEventListener('resize', () => { 
-            camera.aspect = window.innerWidth / window.innerHeight; 
-            camera.updateProjectionMatrix(); 
-            renderer.setSize(window.innerWidth, window.innerHeight); 
-            ScrollTrigger.refresh();
-        });
-
-        // THE FIX: GSAP ScrollTrigger
-        gsap.registerPlugin(ScrollTrigger);
-
-        gsap.to(shape.position, {
-            z: -5,
-            ease: "none",
-            scrollTrigger: {
-                trigger: document.body,
-                start: "top top",
-                end: "bottom bottom",
-                scrub: 0.5
-            }
-        });
-
-        gsap.to(shape.rotation, {
-            z: Math.PI,
-            ease: "none",
-            scrollTrigger: {
-                trigger: document.body,
-                start: "top top",
-                end: "bottom bottom",
-                scrub: 0.5
-            }
+        window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+        
+        // Original, Simple Scroll Math
+        window.addEventListener('scroll', () => { 
+            const p = window.scrollY / (document.body.scrollHeight - window.innerHeight); 
+            gsap.to(shape.position, { z: -p * 5, duration: 0.5 }); 
+            gsap.to(shape.rotation, { z: p * Math.PI, duration: 0.5 }); 
         });
     </script>
 </body>
