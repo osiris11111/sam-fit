@@ -229,7 +229,17 @@
         tick();
 
         window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
-        window.addEventListener('scroll', () => { const p = window.scrollY / (document.body.scrollHeight - window.innerHeight); gsap.to(shape.position, { z: -p * 5, duration: 0.5 }); gsap.to(shape.rotation, { z: p * Math.PI, duration: 0.5 }); });
+        
+        // Anti-Glitch Scroll Math (Clamped GSAP)
+        window.addEventListener('scroll', () => { 
+            const maxScroll = Math.max(1, document.body.scrollHeight - window.innerHeight);
+            let p = window.scrollY / maxScroll;
+            // The magic fix: clamp p between 0 and 1 so rubber-banding on mobile doesn't cause glitches
+            p = Math.max(0, Math.min(1, p));
+            
+            gsap.to(shape.position, { z: -p * 5, duration: 0.5, overwrite: "auto" }); 
+            gsap.to(shape.rotation, { z: p * Math.PI, duration: 0.5, overwrite: "auto" }); 
+        });
 
         // About Us Modal Logic
         const aboutBtn = document.getElementById('about-us-btn');
@@ -242,14 +252,14 @@
             aboutModal.classList.remove('opacity-0', 'pointer-events-none');
             aboutContent.classList.remove('scale-95');
             aboutContent.classList.add('scale-100');
-            document.body.style.overflow = 'hidden'; // Prevent scrolling when open
+            document.body.style.overflow = 'hidden'; 
         }
 
         function closeModal() {
             aboutModal.classList.add('opacity-0', 'pointer-events-none');
             aboutContent.classList.remove('scale-100');
             aboutContent.classList.add('scale-95');
-            document.body.style.overflow = ''; // Re-enable scrolling
+            document.body.style.overflow = ''; 
         }
 
         aboutBtn.addEventListener('click', openModal);
