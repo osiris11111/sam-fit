@@ -11,7 +11,7 @@ import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken }
 import { getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
 
 // --- GEMINI API CONFIG ---
-const apiKey = "AIzaSyCWbHhg6XI1hbHC_uqvjLTYn3l7R8WKkA8"; 
+const apiKey = "AIzaSyBwsnLQTWqG7YArJE4hkT8Jp27QQwUz2e4"; 
 
 async function generateAIFeedback(prompt, systemInstruction) {
   try {
