@@ -4,7 +4,7 @@ import {
   Plus, Trash2, TrendingUp, Calendar, Lock, Video,
   ChevronRight, Dumbbell, ClipboardList, Settings,
   BarChart2, Camera, ArrowLeft, UploadCloud, Link as LinkIcon,
-  Sparkles, Bot, Code, Lightbulb
+  Sparkles, Bot, Code, Lightbulb, AlertTriangle
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
@@ -56,10 +56,10 @@ try {
     appId: "1:805503830384:web:d8eb1271e8f3f3425367b5"
   };
 
+  appId = 'samfit-live'; 
   app = initializeApp(firebaseConfig);
   auth = getAuth(app);
   db = getFirestore(app);
-  appId = 'samfit-live'; // Standardized namespace for your database
 } catch (error) {
   console.error("Firebase init error:", error);
 }
@@ -68,6 +68,7 @@ try {
 export default function App() {
   const [fbUser, setFbUser] = useState(null);
   const [isDbLoading, setIsDbLoading] = useState(true);
+  const [firebaseSetupError, setFirebaseSetupError] = useState(false);
   
   // App State mapped from Firebase
   const [users, setUsers] = useState([]);
@@ -110,7 +111,7 @@ export default function App() {
         console.error("Auth Error:", err);
         // This specifically catches the "configuration-not-found" error you are seeing!
         if (err.message && (err.message.includes('configuration-not-found') || err.message.includes('operation-not-allowed'))) {
-          alert("⚠️ ALMOST THERE! You must go to your Firebase Console -> Authentication -> Sign-in Method, and click 'Enable' on Anonymous Login. Then refresh!");
+          setFirebaseSetupError(true);
         }
         setIsDbLoading(false);
       }
@@ -205,6 +206,30 @@ export default function App() {
   };
 
   const handleLogout = () => setCurrentUser(null);
+
+  if (firebaseSetupError) {
+    return (
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center text-white px-4 text-center font-sans">
+        <div className="bg-zinc-950 border border-zinc-800 p-8 rounded-2xl max-w-md shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-500 to-amber-500"></div>
+          <AlertTriangle size={48} className="text-amber-500 mb-6 mx-auto" />
+          <h2 className="text-xl font-bold mb-4 tracking-wide uppercase">One Last Setup Step!</h2>
+          <p className="text-zinc-400 text-sm mb-6 leading-relaxed">
+            Your Firebase app is successfully connected, but the database is currently blocking sign-ins. To fix this:
+          </p>
+          <ol className="text-left text-sm text-zinc-300 space-y-4 mb-8 bg-black p-5 rounded-xl border border-zinc-800">
+            <li className="flex items-start"><span className="text-amber-500 font-bold mr-2">1.</span> Go to your Firebase Console.</li>
+            <li className="flex items-start"><span className="text-amber-500 font-bold mr-2">2.</span> Click <strong>Authentication</strong> on the left menu.</li>
+            <li className="flex items-start"><span className="text-amber-500 font-bold mr-2">3.</span> Click the <strong>Sign-in method</strong> tab at the top.</li>
+            <li className="flex items-start"><span className="text-amber-500 font-bold mr-2">4.</span> Click <strong>Anonymous</strong>, toggle it to <strong>Enable</strong>, and click Save.</li>
+          </ol>
+          <button onClick={() => window.location.reload()} className="w-full bg-white text-black font-bold uppercase tracking-widest py-3 rounded-lg hover:bg-zinc-200 transition-colors">
+            I've enabled it, Refresh!
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (isDbLoading) {
     return (
