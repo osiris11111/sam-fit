@@ -10,7 +10,8 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
 
-const apiKey = "";
+// --- GEMINI API CONFIG ---
+const apiKey = "AIzaSyCWbHhg6XI1hbHC_uqvjLTYn3l7R8WKkA8"; 
 
 async function generateAIFeedback(prompt, systemInstruction) {
   try {
@@ -43,14 +44,24 @@ const CATEGORIES = [
 
 // --- FIREBASE INITIALIZATION ---
 let app, auth, db, appId;
+
 try {
-  const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+  // Your real live Firebase configuration
+  const firebaseConfig = {
+    apiKey: "AIzaSyD3er01roP71kOET0ebyQyzJxfNcvHUWE8",
+    authDomain: "sam-fit-73b88.firebaseapp.com",
+    projectId: "sam-fit-73b88",
+    storageBucket: "sam-fit-73b88.firebasestorage.app",
+    messagingSenderId: "805503830384",
+    appId: "1:805503830384:web:d8eb1271e8f3f3425367b5"
+  };
+
   app = initializeApp(firebaseConfig);
   auth = getAuth(app);
   db = getFirestore(app);
-  appId = typeof __app_id !== 'undefined' ? __app_id : 'samfit-default';
+  appId = 'samfit-live'; // Standardized namespace for your database
 } catch (error) {
-  console.error("Firebase init error (ignore if in dev environment without config):", error);
+  console.error("Firebase init error:", error);
 }
 
 // --- MAIN APP COMPONENT ---
@@ -63,16 +74,16 @@ export default function App() {
   const [exercises, setExercises] = useState([]);
   const [logs, setLogs] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
-  const [authError, setAuthError] = useState(''); // Added to handle login errors visually
+  const [authError, setAuthError] = useState('');
 
-  // Override standard alerts so they work cleanly inside the preview window
+  // Override standard alerts so they work cleanly inside the app
   useEffect(() => {
     window.alert = (msg) => {
       const el = document.createElement('div');
       el.className = 'fixed top-4 right-4 bg-zinc-900 border border-emerald-900/50 text-emerald-400 px-6 py-4 rounded-xl shadow-2xl z-[9999] font-sans text-sm tracking-wide transition-opacity duration-500';
       el.innerText = msg;
       document.body.appendChild(el);
-      setTimeout(() => { el.classList.add('opacity-0'); setTimeout(() => el.remove(), 500); }, 3000);
+      setTimeout(() => { el.classList.add('opacity-0'); setTimeout(() => el.remove(), 500); }, 8000); // Extended timeout for reading
     };
     window.confirm = () => true; 
   }, []);
@@ -86,12 +97,22 @@ export default function App() {
     const initAuth = async () => {
       try {
         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
+          try {
+            await signInWithCustomToken(auth, __initial_auth_token);
+          } catch (tokenErr) {
+            // The preview token will fail against your personal Firebase config, so we gracefully fallback
+            await signInAnonymously(auth);
+          }
         } else {
           await signInAnonymously(auth);
         }
       } catch (err) {
         console.error("Auth Error:", err);
+        // This specifically catches the "configuration-not-found" error you are seeing!
+        if (err.message && (err.message.includes('configuration-not-found') || err.message.includes('operation-not-allowed'))) {
+          alert("⚠️ ALMOST THERE! You must go to your Firebase Console -> Authentication -> Sign-in Method, and click 'Enable' on Anonymous Login. Then refresh!");
+        }
+        setIsDbLoading(false);
       }
     };
     initAuth();
@@ -103,7 +124,11 @@ export default function App() {
 
   // 2. Fetch Data from Firestore
   useEffect(() => {
-    if (!fbUser || !db) return;
+    if (!fbUser || !db) {
+      // If auth failed to initialize completely, we still want to clear the loading state so the screen isn't blank
+      setTimeout(() => setIsDbLoading(false), 2000); 
+      return;
+    }
 
     // References
     const usersRef = collection(db, 'artifacts', appId, 'public', 'data', 'samfit_users');
@@ -122,7 +147,7 @@ export default function App() {
         setUsers(data);
       }
       uLoaded = true; checkLoaded();
-    }, (err) => console.error(err));
+    }, (err) => console.error("Firestore Error:", err));
 
     const unsubEx = onSnapshot(exercisesRef, (snap) => {
       setExercises(snap.docs.map(d => d.data()));
@@ -164,7 +189,7 @@ export default function App() {
     }
   };
 
-  // Auth Handlers (Custom logic on top of Firebase)
+  // Auth Handlers
   const handleLogin = (username, password) => {
     setAuthError('');
     const user = users.find(u => u.username === username && u.password === password);
@@ -184,7 +209,7 @@ export default function App() {
   if (isDbLoading) {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center text-white">
-        <img src="logo.jpg" alt="Sam Fit" className="h-20 w-20 animate-pulse rounded-full border border-zinc-700 mb-6 object-cover" onError={(e) => { e.target.style.display = 'none' }} />
+        <img src="logo.jpg" alt="Sam Fit" className="h-20 w-20 animate-pulse rounded-full border border-zinc-700 mb-6 object-cover" />
         <p className="text-zinc-500 uppercase tracking-widest text-sm animate-pulse">Loading Workspace...</p>
       </div>
     );
@@ -201,7 +226,7 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-3">
-              <img src="logo.jpg" alt="Sam Fit Logo" className="h-10 w-10 rounded-full object-cover border border-zinc-700" onError={(e) => { e.target.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><rect width="40" height="40" fill="%23333"/><text x="50%" y="50%" fill="white" font-size="20" font-family="sans-serif" text-anchor="middle" dominant-baseline="central">SF</text></svg>'}} />
+              <img src="logo.jpg" alt="Sam Fit Logo" className="h-10 w-10 rounded-full object-cover border border-zinc-700" />
               <span className="text-xl font-bold tracking-[0.2em] uppercase text-white">Sam Fit</span>
             </div>
             <div className="flex items-center space-x-4">
@@ -240,7 +265,7 @@ function LoginScreen({ onLogin, error }) {
       <div className="w-full max-w-md bg-zinc-950/90 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden relative z-10">
         <div className="p-8">
           <div className="flex justify-center mb-8">
-             <img src="logo.jpg" alt="Sam Fit" className="h-28 w-28 rounded-full border border-zinc-700 object-cover shadow-[0_0_30px_rgba(255,255,255,0.05)]" onError={(e) => { e.target.style.display = 'none' }} />
+             <img src="logo.jpg" alt="Sam Fit" className="h-28 w-28 rounded-full border border-zinc-700 object-cover shadow-[0_0_30px_rgba(255,255,255,0.05)]" />
           </div>
           <h2 className="text-2xl font-bold text-center text-white uppercase tracking-[0.2em] mb-6">Sam Fit Portal</h2>
           
@@ -335,6 +360,7 @@ function AdminUserManagement({ users }) {
       await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'samfit_users', newUserId), newUser);
       setNewUsername('');
       setNewPassword('');
+      alert("Client added successfully!");
     } catch (err) {
       alert("Error adding user: " + err.message);
     }
@@ -489,6 +515,7 @@ function AdminExerciseManagement({ exercises }) {
       setTitle('');
       setVideoUrl('');
       setIframeCode('');
+      if (fileInputRef.current) fileInputRef.current.value = '';
       alert("Exercise added successfully!");
     } catch (err) {
       alert("Error adding exercise: " + err.message);
@@ -750,15 +777,7 @@ function UserWorkouts({ exercises, user }) {
 
   const handleComplete = async (exercise, sets, rounds) => {
     if (!db) return;
-    const today = new Date().toISOString().split('T')[0];
-    const record = { title: exercise.title, sets, rounds };
-    const logId = `log_${user.id}_${today}`;
-    
-    // Quick local fetch to see if doc exists to merge arrays, but using setDoc merge is safer
     try {
-      // In a real app we'd fetch first, but since we have `logs` in state locally:
-      // Note: We'd normally use Firestore arrayUnion, but this app architecture manages state globally for simplicity.
-      // We'll dispatch an event that userjournal component picks up if needed, or just let user journal handle its own state.
       alert(`Awesome work completing ${exercise.title}! Make sure to record it in your Daily Journal.`);
     } catch (err) {
       console.error(err);
