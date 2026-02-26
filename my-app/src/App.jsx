@@ -4,7 +4,8 @@ import {
   Plus, Trash2, TrendingUp, Calendar, Lock, Video,
   ChevronRight, Dumbbell, ClipboardList, Settings,
   BarChart2, Camera, ArrowLeft, UploadCloud, Link as LinkIcon,
-  Sparkles, Bot, Code, Lightbulb, AlertTriangle
+  Sparkles, Bot, Code, Lightbulb, AlertTriangle, Home,
+  Droplets, Moon, PersonStanding, Clock, MessageSquare
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
@@ -46,7 +47,6 @@ const CATEGORIES = [
 let app, auth, db, appId;
 
 try {
-  // Your real live Firebase configuration
   const firebaseConfig = {
     apiKey: "AIzaSyD3er01roP71kOET0ebyQyzJxfNcvHUWE8",
     authDomain: "sam-fit-73b88.firebaseapp.com",
@@ -68,70 +68,40 @@ try {
 export default function App() {
   const [fbUser, setFbUser] = useState(null);
   const [isDbLoading, setIsDbLoading] = useState(true);
-  const [firebaseSetupError, setFirebaseSetupError] = useState(false);
   
-  // App State mapped from Firebase
   const [users, setUsers] = useState([]);
   const [exercises, setExercises] = useState([]);
   const [logs, setLogs] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [authError, setAuthError] = useState('');
+  const [sessionStartTime, setSessionStartTime] = useState(null);
 
-  // Override standard alerts so they work cleanly inside the app
   useEffect(() => {
     window.alert = (msg) => {
       const el = document.createElement('div');
       el.className = 'fixed top-4 right-4 bg-zinc-900 border border-emerald-900/50 text-emerald-400 px-6 py-4 rounded-xl shadow-2xl z-[9999] font-sans text-sm tracking-wide transition-opacity duration-500';
       el.innerText = msg;
       document.body.appendChild(el);
-      setTimeout(() => { el.classList.add('opacity-0'); setTimeout(() => el.remove(), 500); }, 8000); // Extended timeout for reading
+      setTimeout(() => { el.classList.add('opacity-0'); setTimeout(() => el.remove(), 500); }, 5000); 
     };
-    window.confirm = () => true; 
   }, []);
 
   // 1. Initialize Firebase Auth
   useEffect(() => {
-    if (!auth) {
-      setIsDbLoading(false);
-      return;
-    }
+    if (!auth) { setIsDbLoading(false); return; }
     const initAuth = async () => {
-      try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          try {
-            await signInWithCustomToken(auth, __initial_auth_token);
-          } catch (tokenErr) {
-            // The preview token will fail against your personal Firebase config, so we gracefully fallback
-            await signInAnonymously(auth);
-          }
-        } else {
-          await signInAnonymously(auth);
-        }
-      } catch (err) {
-        console.error("Auth Error:", err);
-        // This specifically catches the "configuration-not-found" error you are seeing!
-        if (err.message && (err.message.includes('configuration-not-found') || err.message.includes('operation-not-allowed'))) {
-          setFirebaseSetupError(true);
-        }
-        setIsDbLoading(false);
-      }
+      try { await signInAnonymously(auth); } 
+      catch (err) { console.error("Auth Error:", err); setIsDbLoading(false); }
     };
     initAuth();
-    const unsubscribe = onAuthStateChanged(auth, user => {
-      setFbUser(user);
-    });
+    const unsubscribe = onAuthStateChanged(auth, user => { setFbUser(user); });
     return () => unsubscribe();
   }, []);
 
-  // 2. Fetch Data from Firestore
+  // 2. Fetch Data & Auto-Login Logic
   useEffect(() => {
-    if (!fbUser || !db) {
-      // If auth failed to initialize completely, we still want to clear the loading state so the screen isn't blank
-      setTimeout(() => setIsDbLoading(false), 2000); 
-      return;
-    }
+    if (!fbUser || !db) return;
 
-    // References
     const usersRef = collection(db, 'artifacts', appId, 'public', 'data', 'samfit_users');
     const exercisesRef = collection(db, 'artifacts', appId, 'public', 'data', 'samfit_exercises');
     const logsRef = collection(db, 'artifacts', appId, 'public', 'data', 'samfit_logs');
@@ -141,57 +111,28 @@ export default function App() {
 
     const unsubUsers = onSnapshot(usersRef, (snap) => {
       const data = snap.docs.map(d => d.data());
-      // Seed Admin if no users exist
-      if (data.length === 0) {
-        seedAdmin();
-      } else {
-        setUsers(data);
+      setUsers(data);
+      
+      // Auto-Login check (Remember Me functionality)
+      if (!currentUser && fbUser) {
+        const matchingUser = data.find(u => u.firebaseUid === fbUser.uid);
+        if (matchingUser && matchingUser.active) {
+          setCurrentUser(matchingUser);
+          setSessionStartTime(Date.now());
+        }
       }
+      
       uLoaded = true; checkLoaded();
-    }, (err) => console.error("Firestore Error:", err));
+    });
 
-    const unsubEx = onSnapshot(exercisesRef, (snap) => {
-      setExercises(snap.docs.map(d => d.data()));
-      eLoaded = true; checkLoaded();
-    }, (err) => console.error(err));
-
-    const unsubLogs = onSnapshot(logsRef, (snap) => {
-      setLogs(snap.docs.map(d => d.data()));
-      lLoaded = true; checkLoaded();
-    }, (err) => console.error(err));
+    const unsubEx = onSnapshot(exercisesRef, (snap) => { setExercises(snap.docs.map(d => d.data())); eLoaded = true; checkLoaded(); });
+    const unsubLogs = onSnapshot(logsRef, (snap) => { setLogs(snap.docs.map(d => d.data())); lLoaded = true; checkLoaded(); });
 
     return () => { unsubUsers(); unsubEx(); unsubLogs(); };
-  }, [fbUser]);
-
-  // Seed default admin and a test client to Firestore
-  const seedAdmin = async () => {
-    if (!db) return;
-    const adminUser = {
-      id: 'admin_001',
-      username: 'admin',
-      password: 'adminpassword',
-      role: 'admin',
-      active: true,
-      profile: { firstName: 'SamFit', lastName: 'Admin', photo: '' }
-    };
-    const demoClient = {
-      id: 'client_001',
-      username: 'client',
-      password: 'clientpassword',
-      role: 'user',
-      active: true,
-      profile: { firstName: 'Demo', lastName: 'Client', heightM: 1, heightCm: 80, weight: 80, photo: '' }
-    };
-    try {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'samfit_users', adminUser.id), adminUser);
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'samfit_users', demoClient.id), demoClient);
-    } catch (error) {
-      console.error(error);
-    }
-  };
+  }, [fbUser]); // Removed currentUser from dependencies to avoid loop
 
   // Auth Handlers
-  const handleLogin = (username, password) => {
+  const handleLogin = async (username, password, rememberMe) => {
     setAuthError('');
     const user = users.find(u => u.username === username && u.password === password);
     if (user) {
@@ -199,42 +140,40 @@ export default function App() {
         setAuthError("Your access has been revoked. Please contact the administrator.");
         return;
       }
+      
+      // If "Remember Me" is checked, link this device's Firebase Anonymous UID to the user profile
+      if (rememberMe && fbUser && db) {
+        try {
+          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'samfit_users', user.id), {
+            ...user,
+            firebaseUid: fbUser.uid
+          }, { merge: true });
+        } catch (err) { console.error("Failed to save remember me state", err); }
+      }
+
       setCurrentUser(user);
+      setSessionStartTime(Date.now());
     } else {
       setAuthError("Invalid credentials. Please check your username and password.");
     }
   };
 
-  const handleLogout = () => setCurrentUser(null);
-
-  if (firebaseSetupError) {
-    return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center text-white px-4 text-center font-sans">
-        <div className="bg-zinc-950 border border-zinc-800 p-8 rounded-2xl max-w-md shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-500 to-amber-500"></div>
-          <AlertTriangle size={48} className="text-amber-500 mb-6 mx-auto" />
-          <h2 className="text-xl font-bold mb-4 tracking-wide uppercase">One Last Setup Step!</h2>
-          <p className="text-zinc-400 text-sm mb-6 leading-relaxed">
-            Your Firebase app is successfully connected, but the database is currently blocking sign-ins. To fix this:
-          </p>
-          <ol className="text-left text-sm text-zinc-300 space-y-4 mb-8 bg-black p-5 rounded-xl border border-zinc-800">
-            <li className="flex items-start"><span className="text-amber-500 font-bold mr-2">1.</span> Go to your Firebase Console.</li>
-            <li className="flex items-start"><span className="text-amber-500 font-bold mr-2">2.</span> Click <strong>Authentication</strong> on the left menu.</li>
-            <li className="flex items-start"><span className="text-amber-500 font-bold mr-2">3.</span> Click the <strong>Sign-in method</strong> tab at the top.</li>
-            <li className="flex items-start"><span className="text-amber-500 font-bold mr-2">4.</span> Click <strong>Anonymous</strong>, toggle it to <strong>Enable</strong>, and click Save.</li>
-          </ol>
-          <button onClick={() => window.location.reload()} className="w-full bg-white text-black font-bold uppercase tracking-widest py-3 rounded-lg hover:bg-zinc-200 transition-colors">
-            I've enabled it, Refresh!
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const handleLogout = async () => {
+    // Unlink device UID so "Remember Me" is cleared
+    if (currentUser && currentUser.firebaseUid && db) {
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'samfit_users', currentUser.id), {
+        ...currentUser,
+        firebaseUid: null
+      }, { merge: true });
+    }
+    setCurrentUser(null);
+    setSessionStartTime(null);
+  };
 
   if (isDbLoading) {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center text-white">
-        <img src="logo.jpg" alt="Sam Fit" className="h-20 w-20 animate-pulse rounded-full border border-zinc-700 mb-6 object-cover" />
+        <img src="https://samfit.co/logo.png" alt="Sam Fit" className="h-20 w-20 animate-pulse rounded-full border border-zinc-700 mb-6 object-cover" onError={(e) => { e.target.style.display='none'; }}/>
         <p className="text-zinc-500 uppercase tracking-widest text-sm animate-pulse">Loading Workspace...</p>
       </div>
     );
@@ -245,13 +184,13 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-zinc-200 font-sans selection:bg-zinc-700">
+    <div className="min-h-screen bg-black text-zinc-200 font-sans selection:bg-zinc-700 pb-24 md:pb-8">
       {/* Top Navigation */}
       <nav className="border-b border-zinc-800 bg-black/80 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-3">
-              <img src="logo.jpg" alt="Sam Fit Logo" className="h-10 w-10 rounded-full object-cover border border-zinc-700" />
+              <img src="https://samfit.co/logo.png" alt="Sam Fit Logo" className="h-10 w-10 rounded-full object-cover border border-zinc-700 bg-black" onError={(e) => { e.target.style.display='none'; }} />
               <span className="text-xl font-bold tracking-[0.2em] uppercase text-white">Sam Fit</span>
             </div>
             <div className="flex items-center space-x-4">
@@ -267,11 +206,11 @@ export default function App() {
       </nav>
 
       {/* Main Content Area */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {currentUser.role === 'admin' ? (
           <AdminDashboard users={users} logs={logs} exercises={exercises} />
         ) : (
-          <UserDashboard user={currentUser} users={users} exercises={exercises} logs={logs} />
+          <UserDashboard user={currentUser} users={users} exercises={exercises} logs={logs} sessionStartTime={sessionStartTime} />
         )}
       </main>
     </div>
@@ -282,17 +221,19 @@ export default function App() {
 function LoginScreen({ onLogin, error }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
 
   return (
     <div className="min-h-screen bg-black flex flex-col justify-center items-center px-4 bg-[url('https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=2000&q=80')] bg-cover bg-center">
-      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm"></div>
+      <div className="absolute inset-0 bg-black/85 backdrop-blur-sm"></div>
       
-      <div className="w-full max-w-md bg-zinc-950/90 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden relative z-10">
-        <div className="p-8">
-          <div className="flex justify-center mb-8">
-             <img src="logo.jpg" alt="Sam Fit" className="h-28 w-28 rounded-full border border-zinc-700 object-cover shadow-[0_0_30px_rgba(255,255,255,0.05)]" />
+      <div className="w-full max-w-md bg-zinc-950/90 border border-zinc-800 rounded-3xl shadow-2xl overflow-hidden relative z-10">
+        <div className="p-8 pb-10">
+          <div className="flex justify-center mb-6">
+             <img src="https://samfit.co/logo.png" alt="Sam Fit" className="h-28 w-28 rounded-full border border-zinc-700 bg-black object-cover shadow-[0_0_30px_rgba(255,255,255,0.05)]" onError={(e) => { e.target.style.display='none'; }} />
           </div>
-          <h2 className="text-2xl font-bold text-center text-white uppercase tracking-[0.2em] mb-6">Sam Fit Portal</h2>
+          <h2 className="text-2xl font-bold text-center text-white uppercase tracking-[0.2em]">Sam Fit Portal</h2>
+          <p className="text-center text-zinc-500 text-xs tracking-[0.3em] uppercase mt-2 mb-8 font-bold">By Athletes, For Athletes</p>
           
           {error && (
             <div className="bg-red-950/50 border border-red-900/50 text-red-400 text-xs font-bold tracking-widest uppercase p-4 rounded-lg mb-6 text-center animate-in fade-in slide-in-from-top-2">
@@ -300,31 +241,39 @@ function LoginScreen({ onLogin, error }) {
             </div>
           )}
           
-          <form onSubmit={(e) => { e.preventDefault(); onLogin(username, password); }} className="space-y-6">
+          <form onSubmit={(e) => { e.preventDefault(); onLogin(username, password, rememberMe); }} className="space-y-5">
             <div>
-              <label className="block text-xs font-bold tracking-widest uppercase text-zinc-400 mb-2">Username</label>
               <input 
                 type="text" 
-                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500 transition-colors placeholder-zinc-700"
-                placeholder="Enter username"
+                className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-4 text-white focus:outline-none focus:border-zinc-500 transition-colors placeholder-zinc-600 text-sm"
+                placeholder="USERNAME"
                 value={username}
                 onChange={e => setUsername(e.target.value)}
                 required
               />
             </div>
             <div>
-              <label className="block text-xs font-bold tracking-widest uppercase text-zinc-400 mb-2">Password</label>
               <input 
                 type="password" 
-                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500 transition-colors placeholder-zinc-700"
-                placeholder="Enter password"
+                className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-4 text-white focus:outline-none focus:border-zinc-500 transition-colors placeholder-zinc-600 text-sm"
+                placeholder="PASSWORD"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 required
               />
             </div>
-            <button type="submit" className="w-full bg-white text-black font-bold uppercase tracking-widest py-3 rounded-lg hover:bg-zinc-200 transition-colors shadow-lg mt-2">
-              Log In
+            
+            <div className="flex items-center justify-between px-1">
+              <label className="flex items-center space-x-2 cursor-pointer group">
+                <div className={`w-4 h-4 rounded flex items-center justify-center border transition-colors ${rememberMe ? 'bg-white border-white' : 'bg-black border-zinc-600 group-hover:border-zinc-400'}`}>
+                  {rememberMe && <CheckCircle size={12} className="text-black" />}
+                </div>
+                <span className="text-xs font-bold tracking-wider text-zinc-400 uppercase group-hover:text-white transition-colors">Remember Me</span>
+              </label>
+            </div>
+
+            <button type="submit" className="w-full bg-white text-black font-bold uppercase tracking-widest py-4 rounded-xl hover:bg-zinc-200 transition-colors shadow-lg mt-4 text-sm">
+              Enter Arena
             </button>
           </form>
         </div>
@@ -378,34 +327,26 @@ function AdminUserManagement({ users }) {
       password: newPassword,
       role: 'user',
       active: true,
+      coachNote: "Welcome to Sam Fit! I'm excited to help you crush your goals. Check your daily workouts and log your journals!",
       profile: { firstName: '', lastName: '', heightM: 0, heightCm: 0, weight: 0, photo: '' }
     };
     
     try {
       await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'samfit_users', newUserId), newUser);
-      setNewUsername('');
-      setNewPassword('');
+      setNewUsername(''); setNewPassword('');
       alert("Client added successfully!");
-    } catch (err) {
-      alert("Error adding user: " + err.message);
-    }
+    } catch (err) { alert("Error adding user: " + err.message); }
   };
 
   const toggleAccess = async (user) => {
     if (!db) return;
     try {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'samfit_users', user.id), {
-        ...user,
-        active: !user.active
-      }, { merge: true });
-    } catch (err) {
-      alert("Error updating access: " + err.message);
-    }
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'samfit_users', user.id), { ...user, active: !user.active }, { merge: true });
+    } catch (err) { alert("Error updating access: " + err.message); }
   };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-      {/* Add User Form */}
       <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-6 h-fit relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-zinc-500 to-zinc-800"></div>
         <h3 className="text-lg font-bold text-white mb-6 flex items-center tracking-wide"><Plus size={18} className="mr-2 text-zinc-400"/> Create Client</h3>
@@ -424,7 +365,6 @@ function AdminUserManagement({ users }) {
         </form>
       </div>
 
-      {/* User List */}
       <div className="lg:col-span-2 bg-zinc-950 border border-zinc-800 rounded-xl overflow-hidden">
         <div className="px-6 py-5 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/50">
           <h3 className="text-lg font-bold text-white tracking-wide">Client Directory</h3>
@@ -433,36 +373,24 @@ function AdminUserManagement({ users }) {
           {users.map(u => (
             <div key={u.id} className="p-6 flex flex-col sm:flex-row sm:items-center justify-between hover:bg-zinc-900/80 transition-colors gap-4">
               <div className="flex items-center space-x-4">
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg border ${u.active ? 'bg-zinc-900 border-zinc-700 text-white' : 'bg-red-950/30 border-red-900/50 text-red-500'}`}>
-                  {u.profile?.firstName ? u.profile.firstName.charAt(0).toUpperCase() : u.username.charAt(0).toUpperCase()}
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg border overflow-hidden shrink-0 ${u.active ? 'bg-zinc-900 border-zinc-700 text-white' : 'bg-red-950/30 border-red-900/50 text-red-500'}`}>
+                  {u.profile?.photo ? <img src={u.profile.photo} className="w-full h-full object-cover"/> : (u.profile?.firstName ? u.profile.firstName.charAt(0).toUpperCase() : u.username.charAt(0).toUpperCase())}
                 </div>
                 <div>
                   <div className="text-white font-medium flex items-center tracking-wide">
                     {u.profile?.firstName} {u.profile?.lastName} 
                     {!u.profile?.firstName && <span className="text-zinc-600 italic text-sm">Profile Pending</span>}
                   </div>
-                  <div className="text-xs text-zinc-500 font-mono mt-1">
-                    User: <span className="text-zinc-300">{u.username}</span> | Pass: <span className="text-zinc-300">{u.password}</span>
-                  </div>
+                  <div className="text-xs text-zinc-500 font-mono mt-1">User: <span className="text-zinc-300">{u.username}</span> | Pass: <span className="text-zinc-300">{u.password}</span></div>
                 </div>
               </div>
               <div>
-                <button 
-                  onClick={() => toggleAccess(u)}
-                  className={`px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-lg flex items-center w-full sm:w-auto justify-center transition-colors ${u.active ? 'bg-black text-zinc-300 border border-zinc-700 hover:bg-zinc-900 hover:text-white' : 'bg-white text-black hover:bg-zinc-200'}`}
-                >
-                  {u.active ? <Lock size={14} className="mr-2"/> : <CheckCircle size={14} className="mr-2"/>}
-                  {u.active ? 'Revoke Access' : 'Restore Access'}
+                <button onClick={() => toggleAccess(u)} className={`px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-lg flex items-center w-full sm:w-auto justify-center transition-colors ${u.active ? 'bg-black text-zinc-300 border border-zinc-700 hover:bg-zinc-900 hover:text-white' : 'bg-white text-black hover:bg-zinc-200'}`}>
+                  {u.active ? <Lock size={14} className="mr-2"/> : <CheckCircle size={14} className="mr-2"/>} {u.active ? 'Revoke Access' : 'Restore Access'}
                 </button>
               </div>
             </div>
           ))}
-          {users.length === 0 && (
-            <div className="p-12 flex flex-col items-center justify-center text-zinc-600">
-              <User size={40} className="mb-4 opacity-50" />
-              <p>No clients registered yet.</p>
-            </div>
-          )}
         </div>
       </div>
     </div>
@@ -472,204 +400,121 @@ function AdminUserManagement({ users }) {
 function AdminExerciseManagement({ exercises }) {
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState(CATEGORIES[0].name);
-  const [uploadType, setUploadType] = useState('direct'); // 'direct', 'embed', 'iframe', 'upload'
-  const [videoUrl, setVideoUrl] = useState('');
-  const [iframeCode, setIframeCode] = useState('');
-  const [isUploading, setIsUploading] = useState(false);
-  const [isSuggestingTitle, setIsSuggestingTitle] = useState(false);
-  const fileInputRef = useRef(null);
-
-  const handleSuggestTitle = async () => {
-    setIsSuggestingTitle(true);
-    const prompt = `Suggest a single, highly effective exercise name that fits the fitness category "${category}". Just return the name of the exercise, nothing else. No quotes, no extra text.`;
-    const res = await generateAIFeedback(prompt, "You are an expert fitness programmer.");
-    setTitle(res.replace(/["']/g, '').trim());
-    setIsSuggestingTitle(false);
-  };
+  const [instructions, setInstructions] = useState('');
+  const [isGeneratingLibrary, setIsGeneratingLibrary] = useState(false);
 
   const handleSaveExercise = async (e) => {
     e.preventDefault();
     if (!title || !db) return;
 
-    let finalUrl = '';
-
-    // We now prefix the URL so the player knows EXACTLY how to render it
-    if (uploadType === 'direct') {
-      finalUrl = 'DIRECT:' + videoUrl;
-    } else if (uploadType === 'embed') {
-      finalUrl = 'EMBED:' + videoUrl;
-    } else if (uploadType === 'iframe') {
-      finalUrl = 'IFRAME:' + iframeCode;
-    } else if (uploadType === 'upload' && fileInputRef.current?.files[0]) {
-      const file = fileInputRef.current.files[0];
-      
-      // Strict limit to avoid Firestore 1MB document crash
-      if (file.size > 800000) { 
-        alert("File too large! Cloud database limits direct uploads to ~800KB. Please use a Direct Link for larger videos.");
-        return;
-      }
-
-      setIsUploading(true);
-      try {
-        const base64Data = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-        // Use DIRECT prefix so the native player renders the base64 string
-        finalUrl = 'DIRECT:' + base64Data;
-      } catch (err) {
-        alert("Error reading file.");
-        setIsUploading(false);
-        return;
-      }
-      setIsUploading(false);
-    }
-
     const newExId = 'ex_' + Date.now();
-    const newEx = {
-      id: newExId,
-      title,
-      category,
-      videoUrl: finalUrl
-    };
-
     try {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'samfit_exercises', newExId), newEx);
-      setTitle('');
-      setVideoUrl('');
-      setIframeCode('');
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'samfit_exercises', newExId), {
+        id: newExId, title, category, instructions, videoUrl: ''
+      });
+      setTitle(''); setInstructions('');
       alert("Exercise added successfully!");
-    } catch (err) {
-      alert("Error adding exercise: " + err.message);
-    }
+    } catch (err) { alert("Error adding exercise: " + err.message); }
   };
 
   const handleDelete = async (id) => {
     if (!db || !window.confirm("Delete this exercise permanently?")) return;
+    try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'samfit_exercises', id)); } 
+    catch (err) { alert("Error deleting: " + err.message); }
+  };
+
+  // Magic 70-workout seeder
+  const seedWorkoutLibrary = async () => {
+    if (!db) return;
+    if (!window.confirm("This will instantly add 10 pre-written workouts to all 7 categories (70 total). You can edit them later to add video links. Continue?")) return;
+    
+    setIsGeneratingLibrary(true);
+    
+    // Quick template generator
+    const templates = [
+      "Foundations", "Endurance Protocol", "Strength Builder", "Core Crusher", "Agility Drills", 
+      "Power Moves", "Speed Intervals", "Burnout Session", "Mobility Flow", "Max Intensity"
+    ];
+    
+    let counter = 0;
     try {
-      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'samfit_exercises', id));
+      for (const cat of CATEGORIES) {
+        for (let i = 0; i < 10; i++) {
+          const id = `ex_auto_${cat.name.replace(/\s+/g, '')}_${i}_${Date.now()}`;
+          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'samfit_exercises', id), {
+            id: id,
+            title: `${cat.name}: ${templates[i]}`,
+            category: cat.name,
+            instructions: `1. Warm up thoroughly.\n2. Focus on form over speed.\n3. Complete specified sets and rounds.\n4. Stay hydrated.\n\n(Coach: Edit this text and add your video link above)`,
+            videoUrl: ''
+          });
+          counter++;
+        }
+      }
+      alert(`Success! Generated ${counter} total exercises across all categories.`);
     } catch (err) {
-      alert("Error deleting: " + err.message);
+      alert("Error generating library: " + err.message);
     }
+    setIsGeneratingLibrary(false);
   };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-      {/* Add Exercise Form */}
-      <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-6 h-fit relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-zinc-500 to-zinc-800"></div>
-        <h3 className="text-lg font-bold text-white mb-6 flex items-center tracking-wide"><Plus size={18} className="mr-2 text-zinc-400"/> New Exercise</h3>
-        
-        <form onSubmit={handleSaveExercise} className="space-y-5">
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <label className="block text-xs font-bold tracking-widest text-zinc-500 uppercase">Exercise Name</label>
-              <button 
-                type="button"
-                onClick={handleSuggestTitle}
-                disabled={isSuggestingTitle}
-                className="text-[10px] font-bold text-amber-500 hover:text-amber-400 transition-colors flex items-center disabled:opacity-50 uppercase tracking-widest"
-              >
-                <Sparkles size={12} className="mr-1"/> {isSuggestingTitle ? 'Generating...' : '✨ Auto-Suggest'}
-              </button>
+      <div className="space-y-6">
+        <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-6 relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-zinc-500 to-zinc-800"></div>
+          <h3 className="text-lg font-bold text-white mb-6 flex items-center tracking-wide"><Plus size={18} className="mr-2 text-zinc-400"/> New Exercise</h3>
+          <form onSubmit={handleSaveExercise} className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold tracking-widest text-zinc-500 uppercase mb-2">Exercise Name</label>
+              <input type="text" className="w-full bg-black border border-zinc-800 rounded-lg px-4 py-3 text-sm text-white focus:border-zinc-500 outline-none" value={title} onChange={e => setTitle(e.target.value)} required placeholder="e.g. Kettlebell Swings" />
             </div>
-            <input type="text" className="w-full bg-black border border-zinc-800 rounded-lg px-4 py-3 text-sm text-white focus:border-zinc-500 outline-none" value={title} onChange={e => setTitle(e.target.value)} required placeholder="e.g. Kettlebell Swings" />
-          </div>
-          
-          <div>
-            <label className="block text-xs font-bold tracking-widest text-zinc-500 uppercase mb-2">Category</label>
-            <select className="w-full bg-black border border-zinc-800 rounded-lg px-4 py-3 text-sm text-white focus:border-zinc-500 outline-none" value={category} onChange={e => setCategory(e.target.value)}>
-              {CATEGORIES.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
-            </select>
-          </div>
-
-          <div className="pt-2 border-t border-zinc-800">
-            <label className="block text-xs font-bold tracking-widest text-zinc-500 uppercase mb-3">Video Source</label>
-            <div className="flex flex-col space-y-2 mb-4">
-              <div className="flex space-x-2">
-                <button type="button" onClick={() => setUploadType('direct')} className={`flex-1 py-2 text-[10px] font-bold tracking-wider uppercase rounded-lg flex items-center justify-center transition-colors ${uploadType === 'direct' ? 'bg-zinc-800 text-white' : 'bg-black text-zinc-500 border border-zinc-800'}`}>
-                   Direct MP4
-                </button>
-                <button type="button" onClick={() => setUploadType('embed')} className={`flex-1 py-2 text-[10px] font-bold tracking-wider uppercase rounded-lg flex items-center justify-center transition-colors ${uploadType === 'embed' ? 'bg-zinc-800 text-white' : 'bg-black text-zinc-500 border border-zinc-800'}`}>
-                   YT/Vimeo
-                </button>
-                <button type="button" onClick={() => setUploadType('iframe')} className={`flex-1 py-2 text-[10px] font-bold tracking-wider uppercase rounded-lg flex items-center justify-center transition-colors ${uploadType === 'iframe' ? 'bg-zinc-800 text-white' : 'bg-black text-zinc-500 border border-zinc-800'}`}>
-                   Raw Iframe
-                </button>
-                <button type="button" onClick={() => setUploadType('upload')} className={`flex-1 py-2 text-[10px] font-bold tracking-wider uppercase rounded-lg flex items-center justify-center transition-colors ${uploadType === 'upload' ? 'bg-zinc-800 text-white' : 'bg-black text-zinc-500 border border-zinc-800'}`}>
-                   Upload
-                </button>
-              </div>
+            <div>
+              <label className="block text-xs font-bold tracking-widest text-zinc-500 uppercase mb-2">Category</label>
+              <select className="w-full bg-black border border-zinc-800 rounded-lg px-4 py-3 text-sm text-white focus:border-zinc-500 outline-none" value={category} onChange={e => setCategory(e.target.value)}>
+                {CATEGORIES.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+              </select>
             </div>
+            <div>
+              <label className="block text-xs font-bold tracking-widest text-zinc-500 uppercase mb-2">Written Instructions (Optional)</label>
+              <textarea className="w-full bg-black border border-zinc-800 rounded-lg px-4 py-3 text-sm text-white focus:border-zinc-500 outline-none h-24" value={instructions} onChange={e => setInstructions(e.target.value)} placeholder="Step-by-step guidance..." />
+            </div>
+            <button type="submit" className="w-full bg-white text-black text-sm font-bold tracking-widest uppercase py-3 rounded-lg hover:bg-zinc-200 transition-colors mt-2">Save Exercise</button>
+          </form>
+        </div>
 
-            {uploadType === 'direct' && (
-              <div>
-                <input type="url" className="w-full bg-black border border-zinc-800 rounded-lg px-4 py-3 text-sm text-white focus:border-zinc-500 outline-none mb-2" value={videoUrl} onChange={e => setVideoUrl(e.target.value)} placeholder="https://samfit.co/videos/class.mp4" required />
-                <p className="text-[10px] text-zinc-500 font-mono bg-zinc-900/50 p-2 rounded">
-                  ✅ <b>Best Option:</b> Paste a direct link to an .mp4 file hosted on your website. This uses the un-blockable native video player.
-                </p>
-              </div>
-            )}
-
-            {uploadType === 'embed' && (
-              <div>
-                <input type="url" className="w-full bg-black border border-zinc-800 rounded-lg px-4 py-3 text-sm text-white focus:border-zinc-500 outline-none mb-2" value={videoUrl} onChange={e => setVideoUrl(e.target.value)} placeholder="YouTube or Vimeo URL" required />
-                <p className="text-[10px] text-zinc-500 font-mono bg-zinc-900/50 p-2 rounded">
-                  Paste a standard YouTube or Vimeo link. The app will automatically convert it.
-                </p>
-              </div>
-            )}
-            
-            {uploadType === 'iframe' && (
-              <textarea className="w-full bg-black border border-zinc-800 rounded-lg px-4 py-3 text-sm text-white focus:border-zinc-500 outline-none min-h-[100px] font-mono" value={iframeCode} onChange={e => setIframeCode(e.target.value)} placeholder='Paste full <iframe src="..."></iframe> code here' required />
-            )}
-
-            {uploadType === 'upload' && (
-              <div>
-                <input type="file" accept="video/mp4,video/webm" ref={fileInputRef} className="w-full text-sm text-zinc-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-zinc-800 file:text-white hover:file:bg-zinc-700 mb-2" required />
-                <p className="text-[10px] text-zinc-500 font-mono bg-zinc-900/50 p-2 rounded">
-                  ⚠️ <b>Database Limit:</b> Direct app uploads are saved to the database (max 800KB). For larger videos, host them on GitHub/YouTube and use the link options.
-                </p>
-              </div>
-            )}
-          </div>
-
-          <button type="submit" disabled={isUploading} className="w-full bg-white text-black text-sm font-bold tracking-widest uppercase py-3 rounded-lg hover:bg-zinc-200 transition-colors mt-4 disabled:opacity-50">
-            {isUploading ? 'Processing...' : 'Save Exercise'}
+        <div className="bg-amber-950/20 border border-amber-900/50 rounded-xl p-6">
+          <h4 className="text-amber-500 font-bold text-sm mb-2 flex items-center"><Sparkles size={16} className="mr-2"/> Library Automation</h4>
+          <p className="text-xs text-zinc-400 mb-4 leading-relaxed">Instantly populate your app with 10 structured placeholders for every category. Perfect for starting fresh.</p>
+          <button 
+            onClick={seedWorkoutLibrary} 
+            disabled={isGeneratingLibrary}
+            className="w-full bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold tracking-widest uppercase py-3 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {isGeneratingLibrary ? 'Generating 70 Workouts...' : 'Auto-Generate Course Library'}
           </button>
-        </form>
+        </div>
       </div>
 
-      {/* Exercise List */}
       <div className="lg:col-span-2 bg-zinc-950 border border-zinc-800 rounded-xl overflow-hidden">
-        <div className="px-6 py-5 border-b border-zinc-800 bg-zinc-900/50">
-          <h3 className="text-lg font-bold text-white tracking-wide">Exercise Library</h3>
+        <div className="px-6 py-5 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/50">
+          <h3 className="text-lg font-bold text-white tracking-wide">Exercise Library <span className="text-zinc-500 text-sm ml-2">({exercises.length})</span></h3>
         </div>
-        <div className="divide-y divide-zinc-800 max-h-[600px] overflow-y-auto">
-          {exercises.length > 0 ? exercises.map(ex => (
+        <div className="divide-y divide-zinc-800 max-h-[700px] overflow-y-auto">
+          {exercises.map(ex => (
             <div key={ex.id} className="p-4 sm:p-6 flex items-center justify-between hover:bg-zinc-900/80 transition-colors">
               <div className="flex items-center space-x-4">
-                <div className="w-16 h-12 bg-black rounded flex items-center justify-center border border-zinc-800 shrink-0">
-                  {ex.videoUrl ? <Play size={16} className="text-zinc-500" /> : <Video size={16} className="text-zinc-700" />}
+                <div className="w-12 h-12 bg-black rounded-lg flex items-center justify-center border border-zinc-800 shrink-0">
+                  <Dumbbell size={20} className="text-zinc-600" />
                 </div>
                 <div>
                   <div className="text-white font-medium tracking-wide">{ex.title}</div>
-                  <div className="text-xs font-bold tracking-widest uppercase text-zinc-500 mt-1">{ex.category}</div>
+                  <div className="text-[10px] font-bold tracking-widest uppercase text-zinc-500 mt-1">{ex.category} {ex.videoUrl ? '• VIDEO ADDED' : '• NO VIDEO'}</div>
                 </div>
               </div>
-              <button onClick={() => handleDelete(ex.id)} className="p-2 text-zinc-600 hover:text-red-500 hover:bg-red-950/30 rounded transition-colors">
-                <Trash2 size={18} />
-              </button>
+              <button onClick={() => handleDelete(ex.id)} className="p-2 text-zinc-600 hover:text-red-500 hover:bg-red-950/30 rounded transition-colors"><Trash2 size={18} /></button>
             </div>
-          )) : (
-            <div className="p-12 flex flex-col items-center justify-center text-zinc-600">
-              <Dumbbell size={40} className="mb-4 opacity-50" />
-              <p>No exercises added yet.</p>
-            </div>
-          )}
+          ))}
         </div>
       </div>
     </div>
@@ -678,9 +523,29 @@ function AdminExerciseManagement({ exercises }) {
 
 function AdminAnalytics({ clients, logs }) {
   const [selectedUserId, setSelectedUserId] = useState(clients[0]?.id || null);
+  const [coachNote, setCoachNote] = useState('');
+  const [isSavingNote, setIsSavingNote] = useState(false);
   
   const selectedUser = clients.find(c => c.id === selectedUserId);
   const userLogs = logs.filter(l => l.userId === selectedUserId).sort((a,b) => new Date(b.date) - new Date(a.date));
+
+  // Load existing note when user changes
+  useEffect(() => {
+    if (selectedUser) setCoachNote(selectedUser.coachNote || '');
+  }, [selectedUser]);
+
+  const handleSaveNote = async () => {
+    if (!db || !selectedUser) return;
+    setIsSavingNote(true);
+    try {
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'samfit_users', selectedUser.id), {
+        ...selectedUser,
+        coachNote: coachNote
+      }, { merge: true });
+      alert("Coach note sent to client's home screen!");
+    } catch(err) { alert("Error saving note."); }
+    setIsSavingNote(false);
+  };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
@@ -688,22 +553,31 @@ function AdminAnalytics({ clients, logs }) {
         <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4 px-2">Select Client</h3>
         <div className="space-y-1">
           {clients.map(c => (
-            <button 
-              key={c.id} 
-              onClick={() => setSelectedUserId(c.id)}
-              className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center space-x-3 ${selectedUserId === c.id ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:bg-zinc-900'}`}
-            >
-              <User size={16} />
-              <span className="truncate">{c.profile?.firstName || c.username}</span>
+            <button key={c.id} onClick={() => setSelectedUserId(c.id)} className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center space-x-3 ${selectedUserId === c.id ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:bg-zinc-900'}`}>
+              <div className="w-6 h-6 rounded-full bg-black border border-zinc-700 flex items-center justify-center overflow-hidden shrink-0">
+                {c.profile?.photo ? <img src={c.profile.photo} className="w-full h-full object-cover"/> : <User size={12}/>}
+              </div>
+              <span className="truncate text-sm">{c.profile?.firstName || c.username}</span>
             </button>
           ))}
-          {clients.length === 0 && <p className="text-xs text-zinc-600 px-2 italic">No clients available.</p>}
         </div>
       </div>
 
       <div className="lg:col-span-3 space-y-6">
         {selectedUser ? (
           <>
+            <div className="bg-zinc-950 border border-zinc-800 p-6 rounded-xl border-l-4 border-l-amber-500">
+              <h3 className="text-sm font-bold text-white flex items-center mb-3 uppercase tracking-widest"><MessageSquare size={16} className="mr-2 text-amber-500"/> Direct Coach Note</h3>
+              <p className="text-xs text-zinc-400 mb-3">This message will appear prominently on the client's Home Screen.</p>
+              <textarea 
+                className="w-full bg-black border border-zinc-800 rounded-lg p-4 text-sm text-white focus:border-amber-500/50 outline-none mb-3 min-h-[100px]"
+                value={coachNote} onChange={e => setCoachNote(e.target.value)} placeholder="Write an encouraging note, advice, or custom plan here..."
+              />
+              <button onClick={handleSaveNote} disabled={isSavingNote} className="bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold uppercase tracking-widest px-6 py-2 rounded-lg transition-colors">
+                {isSavingNote ? 'Sending...' : 'Pin to Client Home'}
+              </button>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                <div className="bg-zinc-950 border border-zinc-800 p-6 rounded-xl relative overflow-hidden group">
                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><TrendingUp size={48}/></div>
@@ -728,11 +602,18 @@ function AdminAnalytics({ clients, logs }) {
                </div>
                <div className="p-6 space-y-4 max-h-[400px] overflow-y-auto">
                  {userLogs.length > 0 ? userLogs.map(log => (
-                   <div key={log.id} className="bg-black p-5 rounded-xl border border-zinc-800/50 hover:border-zinc-700 transition-colors">
+                   <div key={log.id} className="bg-black p-5 rounded-xl border border-zinc-800/50">
                      <div className="flex justify-between items-start mb-3 border-b border-zinc-900 pb-3">
                        <div className="text-sm font-bold text-white flex items-center tracking-wide"><Calendar size={14} className="mr-2 text-zinc-500"/> {log.date}</div>
                        <div className="text-xs font-bold tracking-widest text-zinc-500 bg-zinc-900 px-3 py-1 rounded-full">{log.hoursTrained} hrs</div>
                      </div>
+                     
+                     <div className="flex gap-4 mb-4 pt-2">
+                        <div className={`flex items-center text-xs font-bold ${log.water ? 'text-blue-400' : 'text-zinc-600'}`}><Droplets size={14} className="mr-1"/> Water</div>
+                        <div className={`flex items-center text-xs font-bold ${log.stretch ? 'text-amber-400' : 'text-zinc-600'}`}><PersonStanding size={14} className="mr-1"/> Stretch</div>
+                        <div className={`flex items-center text-xs font-bold ${log.sleep ? 'text-purple-400' : 'text-zinc-600'}`}><Moon size={14} className="mr-1"/> Sleep</div>
+                     </div>
+
                      <p className="text-sm text-zinc-300 mb-4 bg-zinc-900/30 p-3 rounded-lg"><span className="text-zinc-500 font-bold text-xs uppercase tracking-widest block mb-1">Diet Notes</span> {log.food || 'No diet details logged.'}</p>
                      
                      {log.exercises?.length > 0 && (
@@ -740,22 +621,20 @@ function AdminAnalytics({ clients, logs }) {
                          <span className="text-zinc-500 font-bold text-xs uppercase tracking-widest block mb-2">Exercises</span>
                          <div className="flex flex-wrap gap-2">
                            {log.exercises.map((ex, i) => (
-                             <div key={i} className="text-xs border border-zinc-800 inline-flex items-center px-3 py-1.5 rounded-lg bg-black">
-                               <CheckCircle size={12} className="text-zinc-500 mr-2"/>
-                               <span className="text-white font-medium mr-2">{ex.title}</span> 
-                               <span className="text-zinc-500 font-mono">{ex.sets}x{ex.rounds}</span>
+                             <div key={i} className="text-[10px] border border-zinc-800 inline-flex items-center px-2 py-1 rounded bg-black">
+                               <CheckCircle size={10} className="text-zinc-500 mr-1"/><span className="text-white mr-1">{ex.title}</span> <span className="text-zinc-500">{ex.sets}x{ex.rounds}</span>
                              </div>
                            ))}
                          </div>
                        </div>
                      )}
                    </div>
-                 )) : <div className="text-sm text-zinc-500 py-12 text-center flex flex-col items-center"><ClipboardList size={32} className="mb-3 opacity-20"/> No activity logged yet.</div>}
+                 )) : <div className="text-sm text-zinc-500 py-12 text-center">No activity logged yet.</div>}
                </div>
             </div>
           </>
         ) : (
-          <div className="bg-zinc-950 border border-zinc-800 p-12 rounded-xl text-center text-zinc-500 flex flex-col items-center justify-center h-full min-h-[400px]">
+          <div className="bg-zinc-950 border border-zinc-800 p-12 rounded-xl text-center text-zinc-500 flex flex-col items-center justify-center min-h-[400px]">
             <Activity size={48} className="mb-4 opacity-20" />
             <p className="tracking-wide">Select a client to view their analytics</p>
           </div>
@@ -765,72 +644,112 @@ function AdminAnalytics({ clients, logs }) {
   );
 }
 
-// --- USER DASHBOARD ---
-function UserDashboard({ user, users, exercises, logs }) {
-  const [activeTab, setActiveTab] = useState('workouts'); // workouts, journal, profile
+// --- USER DASHBOARD (WITH BOTTOM NAV) ---
+function UserDashboard({ user, users, exercises, logs, sessionStartTime }) {
+  const [activeTab, setActiveTab] = useState('home'); 
 
   return (
-    <div className="space-y-8">
-      {/* Mobile-friendly Tab Navigation */}
-      <div className="flex space-x-2 border-b border-zinc-800 pb-2 overflow-x-auto no-scrollbar">
-        {[
-          { id: 'workouts', label: 'Workouts', icon: <Dumbbell size={16}/> },
-          { id: 'journal', label: 'Daily Journal', icon: <ClipboardList size={16}/> },
-          { id: 'profile', label: 'My Profile', icon: <User size={16}/> }
-        ].map(tab => (
-          <button 
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)} 
-            className={`px-4 py-2 font-medium text-sm transition-all flex items-center space-x-2 whitespace-nowrap rounded-t-lg ${activeTab === tab.id ? 'bg-zinc-900 text-white border-b-2 border-white' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/50'}`}
-          >
-            {tab.icon} <span>{tab.label}</span>
-          </button>
-        ))}
+    <>
+      <div className="pb-8 animate-in fade-in duration-500">
+        {activeTab === 'home' && <UserHome user={user} sessionStartTime={sessionStartTime} />}
+        {activeTab === 'workouts' && <UserWorkouts exercises={exercises} user={user} />}
+        {activeTab === 'journal' && <UserJournal user={user} logs={logs} />}
+        {activeTab === 'profile' && <UserProfile user={user} logs={logs} appId={appId} db={db} />}
       </div>
 
-      {activeTab === 'workouts' && <UserWorkouts exercises={exercises} user={user} />}
-      {activeTab === 'journal' && <UserJournal user={user} logs={logs} />}
-      {activeTab === 'profile' && <UserProfile user={user} logs={logs} />}
+      {/* FIXED BOTTOM NAVIGATION BAR */}
+      <div className="fixed bottom-0 left-0 w-full bg-zinc-950/95 backdrop-blur-lg border-t border-zinc-800 pb-safe z-50">
+        <div className="flex justify-around items-center h-16 max-w-md mx-auto px-4">
+          {[
+            { id: 'home', label: 'Home', icon: <Home size={20}/> },
+            { id: 'workouts', label: 'Classes', icon: <Dumbbell size={20}/> },
+            { id: 'journal', label: 'Journal', icon: <ClipboardList size={20}/> },
+            { id: 'profile', label: 'Profile', icon: <User size={20}/> }
+          ].map(tab => (
+            <button 
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)} 
+              className={`flex flex-col items-center justify-center w-full h-full space-y-1 transition-colors ${activeTab === tab.id ? 'text-white' : 'text-zinc-500 hover:text-zinc-400'}`}
+            >
+              {tab.icon}
+              <span className="text-[10px] font-bold tracking-widest uppercase">{tab.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// NEW COMPONENT: Home Screen with Timer and Coach Notes
+function UserHome({ user, sessionStartTime }) {
+  const [elapsedTime, setElapsedTime] = useState('00:00:00');
+
+  useEffect(() => {
+    if (!sessionStartTime) return;
+    const interval = setInterval(() => {
+      const diff = Date.now() - sessionStartTime;
+      const h = Math.floor(diff / 3600000).toString().padStart(2, '0');
+      const m = Math.floor((diff % 3600000) / 60000).toString().padStart(2, '0');
+      const s = Math.floor((diff % 60000) / 1000).toString().padStart(2, '0');
+      setElapsedTime(`${h}:${m}:${s}`);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [sessionStartTime]);
+
+  return (
+    <div className="space-y-6 max-w-md mx-auto w-full pt-4">
+      <div className="text-center mb-8">
+        <h1 className="text-3xl font-light text-white mb-2">Welcome Back, <br/><span className="font-bold">{user.profile?.firstName || user.username}</span></h1>
+        <p className="text-zinc-500 text-xs font-bold uppercase tracking-[0.2em]">Ready to conquer today?</p>
+      </div>
+
+      {/* Live Session Timer */}
+      <div className="bg-gradient-to-br from-zinc-900 to-black border border-zinc-800 p-8 rounded-3xl flex flex-col items-center justify-center shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-4 opacity-5"><Clock size={100}/></div>
+        <div className="text-zinc-500 text-xs font-bold tracking-widest uppercase mb-4 flex items-center"><span className="w-2 h-2 rounded-full bg-red-500 animate-pulse mr-2"></span> Active Session</div>
+        <div className="text-5xl md:text-6xl font-mono text-white tracking-wider font-light drop-shadow-[0_0_15px_rgba(255,255,255,0.1)]">{elapsedTime}</div>
+      </div>
+
+      {/* Coach's Note Board */}
+      {user.coachNote && (
+        <div className="bg-amber-950/20 border border-amber-900/30 rounded-3xl p-6 relative overflow-hidden mt-6">
+          <div className="flex items-center text-amber-500 mb-4">
+            <MessageSquare size={18} className="mr-2"/>
+            <span className="text-xs font-bold tracking-widest uppercase">Note from Coach</span>
+          </div>
+          <p className="text-amber-100/90 text-sm leading-relaxed whitespace-pre-wrap">{user.coachNote}</p>
+        </div>
+      )}
     </div>
   );
 }
 
 function UserWorkouts({ exercises, user }) {
   const [selectedCategory, setSelectedCategory] = useState(null);
-
   const categoryExercises = exercises.filter(e => e.category === selectedCategory);
 
   const handleComplete = async (exercise, sets, rounds) => {
-    if (!db) return;
-    try {
-      alert(`Awesome work completing ${exercise.title}! Make sure to record it in your Daily Journal.`);
-    } catch (err) {
-      console.error(err);
-    }
+    alert(`Awesome work completing ${exercise.title}! Make sure to log it in your Daily Journal.`);
   };
 
   if (selectedCategory) {
     return (
-      <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <button 
-          onClick={() => setSelectedCategory(null)}
-          className="flex items-center text-sm font-bold uppercase tracking-widest text-zinc-400 hover:text-white transition-colors group"
-        >
-          <ArrowLeft size={16} className="mr-2 group-hover:-translate-x-1 transition-transform" /> Back to Categories
+      <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-5xl mx-auto">
+        <button onClick={() => setSelectedCategory(null)} className="flex items-center text-sm font-bold uppercase tracking-widest text-zinc-400 hover:text-white transition-colors group">
+          <ArrowLeft size={16} className="mr-2 group-hover:-translate-x-1 transition-transform" /> Back
         </button>
-        
         <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
           <h2 className="text-2xl font-bold text-white uppercase tracking-widest">{selectedCategory}</h2>
-          <span className="text-xs font-mono text-zinc-500 bg-zinc-900 px-3 py-1 rounded-full">{categoryExercises.length} Workouts</span>
+          <span className="text-xs font-mono text-zinc-500 bg-zinc-900 px-3 py-1 rounded-full">{categoryExercises.length} Classes</span>
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 pt-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-2">
           {categoryExercises.length > 0 ? categoryExercises.map(ex => (
             <ExerciseCard key={ex.id} exercise={ex} onComplete={handleComplete} />
           )) : (
-            <div className="col-span-full py-20 flex flex-col items-center justify-center text-zinc-500 border border-dashed border-zinc-800 rounded-2xl bg-zinc-950/50">
+            <div className="col-span-full py-20 flex flex-col items-center justify-center text-zinc-500 border border-dashed border-zinc-800 rounded-3xl bg-zinc-950/50">
               <Dumbbell size={48} className="mb-4 opacity-20" />
-              <p className="tracking-wide">No exercises assigned to this category yet.</p>
+              <p className="tracking-wide">No classes assigned here yet.</p>
             </div>
           )}
         </div>
@@ -838,24 +757,16 @@ function UserWorkouts({ exercises, user }) {
     );
   }
 
-  // Categories Grid View
   return (
-    <div className="space-y-6">
-      <h2 className="text-xl font-bold text-white mb-6 tracking-wide">Choose Your Discipline</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+    <div className="space-y-6 max-w-md mx-auto w-full pt-4">
+      <h2 className="text-xl font-bold text-white mb-6 tracking-wide text-center uppercase">Choose Discipline</h2>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {CATEGORIES.map(cat => (
-          <div 
-            key={cat.name}
-            onClick={() => setSelectedCategory(cat.name)}
-            className="group relative h-48 rounded-2xl overflow-hidden cursor-pointer shadow-lg hover:shadow-xl hover:shadow-zinc-800/50 transition-all border border-zinc-800 hover:border-zinc-600"
-          >
+          <div key={cat.name} onClick={() => setSelectedCategory(cat.name)} className="group relative h-40 rounded-3xl overflow-hidden cursor-pointer shadow-lg hover:border-zinc-500 transition-all border border-zinc-800">
             <div className="absolute inset-0 bg-black/60 group-hover:bg-black/40 transition-colors z-10"></div>
-            <img src={cat.img} alt={cat.name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+            <img src={cat.img} alt={cat.name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
             <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-6 text-center">
-              <h3 className="text-2xl font-bold text-white uppercase tracking-widest drop-shadow-lg">{cat.name}</h3>
-              <div className="mt-4 opacity-0 group-hover:opacity-100 transform translate-y-4 group-hover:translate-y-0 transition-all duration-300">
-                <span className="bg-white text-black text-xs font-bold px-4 py-2 rounded-full uppercase tracking-widest">Enter Class</span>
-              </div>
+              <h3 className="text-xl font-bold text-white uppercase tracking-widest drop-shadow-lg">{cat.name}</h3>
             </div>
           </div>
         ))}
@@ -867,145 +778,55 @@ function UserWorkouts({ exercises, user }) {
 function ExerciseCard({ exercise, onComplete }) {
   const [sets, setSets] = useState(5);
   const [rounds, setRounds] = useState(1);
-  const [tips, setTips] = useState('');
-  const [isLoadingTips, setIsLoadingTips] = useState(false);
 
-  const handleGetTips = async () => {
-    if (tips) {
-      setTips(''); // Toggle off
-      return;
+  // Simple video renderer logic
+  const renderVideo = () => {
+    if (!exercise.videoUrl) return <div className="flex flex-col items-center justify-center text-zinc-700 h-full w-full absolute inset-0"><Video size={40} className="mb-3 opacity-30" /><span className="text-xs uppercase tracking-widest font-bold">No Video Provided</span></div>;
+    
+    if (exercise.videoUrl.startsWith('IFRAME:')) return <div className="w-full h-full absolute inset-0 [&>iframe]:w-full [&>iframe]:h-full [&>iframe]:absolute [&>iframe]:inset-0 [&>iframe]:border-0" dangerouslySetInnerHTML={{ __html: exercise.videoUrl.replace('IFRAME:', '') }} />;
+    
+    let url = exercise.videoUrl.replace('EMBED:', '').replace('DIRECT:', '');
+    if (url.includes('youtube') || url.includes('youtu.be') || exercise.videoUrl.startsWith('EMBED:')) {
+      const ytMatch = url.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/);
+      if (ytMatch && ytMatch[2].length === 11) url = `https://www.youtube.com/embed/${ytMatch[2]}`;
+      return <iframe src={url} className="w-full h-full absolute inset-0 border-0" allowFullScreen></iframe>;
     }
-    setIsLoadingTips(true);
-    const prompt = `Give me 3 quick, bulleted pro-tips on proper form and 1 common mistake to avoid for the exercise: "${exercise.title}". Keep it extremely brief and punchy.`;
-    const res = await generateAIFeedback(prompt, "You are an elite Sam Fit personal trainer focusing on safe form.");
-    setTips(res);
-    setIsLoadingTips(false);
+    
+    return <video src={url} controls className="w-full h-full absolute inset-0 object-cover"></video>;
   };
 
-  // Smart URL parser that strictly follows the Admin's chosen rendering method
-  const embedData = React.useMemo(() => {
-    const rawUrl = exercise.videoUrl || '';
-    if (!rawUrl) return { url: '', type: 'none' };
-
-    // 1. Check for explicit prefixes added by the new Admin system
-    if (rawUrl.startsWith('IFRAME:')) {
-      return { url: rawUrl.replace('IFRAME:', ''), type: 'iframe-raw' };
-    }
-    if (rawUrl.startsWith('DIRECT:')) {
-      return { url: rawUrl.replace('DIRECT:', ''), type: 'video' };
-    }
-    if (rawUrl.startsWith('EMBED:')) {
-      let url = rawUrl.replace('EMBED:', '');
-      
-      // Auto-format standard links for YouTube
-      const ytMatch = url.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/);
-      if (ytMatch && ytMatch[2].length === 11) {
-        url = `https://www.youtube.com/embed/${ytMatch[2]}`;
-      }
-      // Auto-format standard links for Vimeo
-      const vimeoMatch = url.match(/(?:www\.|player\.)?vimeo.com\/(?:channels\/(?:\w+\/)?|groups\/(?:[^\/]*)\/videos\/|album\/(?:\d+)\/video\/|video\/|)(\d+)/i);
-      if (vimeoMatch && vimeoMatch[1]) {
-        url = `https://player.vimeo.com/video/${vimeoMatch[1]}`;
-      }
-      return { url: url, type: 'embed' };
-    }
-
-    // 2. Fallback for older entries without a prefix
-    const lowerUrl = rawUrl.toLowerCase();
-    if (lowerUrl.includes('<iframe')) return { url: rawUrl, type: 'iframe-raw' };
-    if (lowerUrl.includes('youtube') || lowerUrl.includes('youtu.be') || lowerUrl.includes('vimeo')) return { url: rawUrl, type: 'embed' };
-    
-    return { url: rawUrl, type: 'video' };
-  }, [exercise.videoUrl]);
-
   return (
-    <div className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden shadow-xl flex flex-col hover:border-zinc-700 transition-colors">
-      {/* Video Placeholder */}
-      <div className="aspect-video bg-black relative flex items-center justify-center border-b border-zinc-800 group">
-        {embedData.type === 'iframe-raw' ? (
-          <div 
-            className="w-full h-full absolute inset-0 [&>iframe]:w-full [&>iframe]:h-full [&>iframe]:absolute [&>iframe]:inset-0 [&>iframe]:border-0"
-            dangerouslySetInnerHTML={{ __html: embedData.url }} 
-          />
-        ) : embedData.type === 'embed' ? (
-          <>
-            <iframe 
-              src={embedData.url} 
-              className="w-full h-full absolute inset-0 border-0 z-10" 
-              allowFullScreen
-            ></iframe>
-            <a href={embedData.url} target="_blank" rel="noreferrer" className="absolute top-2 right-2 z-20 bg-black/80 text-white text-[10px] px-3 py-1 rounded font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm border border-zinc-700">
-              Open Video
-            </a>
-          </>
-        ) : embedData.type === 'video' ? (
-          <video src={embedData.url} controls className="w-full h-full absolute inset-0 object-cover"></video>
-        ) : (
-          <div className="flex flex-col items-center justify-center text-zinc-700">
-            <Video size={40} className="mb-3 opacity-50" />
-            <span className="text-xs uppercase tracking-widest font-bold">No Video</span>
-          </div>
-        )}
+    <div className="bg-zinc-950 border border-zinc-800 rounded-3xl overflow-hidden shadow-xl flex flex-col hover:border-zinc-700 transition-colors">
+      <div className="aspect-video bg-black relative flex items-center justify-center border-b border-zinc-800 group overflow-hidden">
+        {renderVideo()}
       </div>
-      
       <div className="p-6 flex-1 flex flex-col">
-        <h4 className="text-lg font-bold text-white mb-6 tracking-wide">{exercise.title}</h4>
+        <h4 className="text-lg font-bold text-white mb-2 tracking-wide">{exercise.title}</h4>
         
-        <div className="grid grid-cols-2 gap-4 mb-8 flex-1">
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-widest text-zinc-500 mb-2">Sets</label>
-            <select 
-              value={sets} 
-              onChange={e => setSets(Number(e.target.value))}
-              className="w-full bg-black border border-zinc-800 text-white text-sm rounded-lg p-3 outline-none focus:border-zinc-500 transition-colors"
-            >
-              <option value={5}>5 Sets</option>
-              <option value={10}>10 Sets</option>
-              <option value={15}>15 Sets</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-widest text-zinc-500 mb-2">Rounds</label>
-            <select 
-              value={rounds} 
-              onChange={e => setRounds(Number(e.target.value))}
-              className="w-full bg-black border border-zinc-800 text-white text-sm rounded-lg p-3 outline-none focus:border-zinc-500 transition-colors"
-            >
-              <option value={1}>1 Round</option>
-              <option value={2}>2 Rounds</option>
-              <option value={3}>3 Rounds</option>
-            </select>
-          </div>
-        </div>
-
-        {tips && (
-          <div className="mb-6 p-4 bg-zinc-900/80 border border-zinc-800 rounded-xl text-sm text-zinc-300 leading-relaxed animate-in fade-in slide-in-from-top-2">
-            <div className="flex items-center text-amber-500 mb-3">
-              <Lightbulb size={16} className="mr-2"/>
-              <span className="text-xs font-bold tracking-widest uppercase">Form & Safety Tips</span>
-            </div>
-            <div className="whitespace-pre-wrap text-xs">{tips}</div>
+        {exercise.instructions && (
+          <div className="mb-6 p-4 bg-zinc-900/50 rounded-xl text-xs text-zinc-400 whitespace-pre-wrap leading-relaxed border border-zinc-800/50">
+            {exercise.instructions}
           </div>
         )}
 
-        <div className="space-y-3 mt-auto">
-          <button 
-            onClick={() => onComplete(exercise, sets, rounds)}
-            className="w-full bg-zinc-900 hover:bg-zinc-800 text-white border border-zinc-800 hover:border-zinc-600 text-sm font-bold tracking-widest uppercase py-4 rounded-xl flex items-center justify-center transition-all"
-          >
-            <CheckCircle size={18} className="mr-2 text-zinc-400" />
-            Mark as Done
-          </button>
-          
-          <button 
-            onClick={handleGetTips}
-            disabled={isLoadingTips}
-            className="w-full bg-transparent text-zinc-400 hover:text-amber-400 text-xs font-bold tracking-widest uppercase py-3 rounded-xl flex items-center justify-center transition-all disabled:opacity-50"
-          >
-            <Sparkles size={14} className="mr-2" />
-            {isLoadingTips ? 'Consulting Coach...' : tips ? 'Hide Tips' : '✨ AI Form Tips'}
-          </button>
+        <div className="grid grid-cols-2 gap-4 mb-6 mt-auto">
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2">Sets</label>
+            <select value={sets} onChange={e => setSets(Number(e.target.value))} className="w-full bg-black border border-zinc-800 text-white text-sm rounded-xl p-3 outline-none focus:border-zinc-500">
+              {[1,2,3,4,5,10,15].map(n => <option key={n} value={n}>{n} Sets</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2">Rounds</label>
+            <select value={rounds} onChange={e => setRounds(Number(e.target.value))} className="w-full bg-black border border-zinc-800 text-white text-sm rounded-xl p-3 outline-none focus:border-zinc-500">
+              {[1,2,3,4,5].map(n => <option key={n} value={n}>{n} Rounds</option>)}
+            </select>
+          </div>
         </div>
+
+        <button onClick={() => onComplete(exercise, sets, rounds)} className="w-full bg-white text-black text-sm font-bold tracking-widest uppercase py-4 rounded-xl flex items-center justify-center transition-all hover:bg-zinc-200">
+          <CheckCircle size={18} className="mr-2" /> Mark as Done
+        </button>
       </div>
     </div>
   );
@@ -1018,309 +839,186 @@ function UserJournal({ user, logs }) {
   const existingLog = logs.find(l => l.userId === user.id && l.date === date);
   const [food, setFood] = useState('');
   const [hours, setHours] = useState(0);
+  
+  // New Habit Tracker States
+  const [water, setWater] = useState(false);
+  const [stretch, setStretch] = useState(false);
+  const [sleep, setSleep] = useState(false);
+  
   const [isSaving, setIsSaving] = useState(false);
-  const [aiAnalysis, setAiAnalysis] = useState('');
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   useEffect(() => {
     setFood(existingLog?.food || '');
     setHours(existingLog?.hoursTrained || 0);
-    setAiAnalysis(''); // Reset analysis on date change
+    setWater(existingLog?.water || false);
+    setStretch(existingLog?.stretch || false);
+    setSleep(existingLog?.sleep || false);
   }, [date, existingLog]);
 
   const handleSave = async () => {
     if (!db) return;
     setIsSaving(true);
     const logId = `log_${user.id}_${date}`;
-    const logData = {
-      id: logId,
-      userId: user.id,
-      date,
-      exercises: existingLog?.exercises || [], // preserve existing if any
-      food,
-      hoursTrained: Number(hours),
-      weightLog: user.profile?.weight || 0
-    };
-
     try {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'samfit_logs', logId), logData);
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'samfit_logs', logId), {
+        id: logId, userId: user.id, date,
+        exercises: existingLog?.exercises || [],
+        food, hoursTrained: Number(hours), weightLog: user.profile?.weight || 0,
+        water, stretch, sleep // Save habits to cloud
+      });
       alert('Journal entry safely stored in the cloud.');
-    } catch (err) {
-      alert("Error saving: " + err.message);
-    }
+    } catch (err) { alert("Error saving: " + err.message); }
     setIsSaving(false);
   };
 
-  const handleAnalyzeDiet = async () => {
-    if (!food) return alert("Please add some nutrition notes first!");
-    setIsAnalyzing(true);
-    const prompt = `Analyze this daily food log for a fitness client: "${food}". Give a very brief 3-bullet point summary: 1. Estimated quality, 2. Praise, 3. One suggestion for improvement. Keep it encouraging and short.`;
-    const response = await generateAIFeedback(prompt, "You are a professional nutritionist at Sam Fit gym. Keep responses very concise and directly address the user.");
-    setAiAnalysis(response);
-    setIsAnalyzing(false);
-  };
-
-  const currentExercises = existingLog?.exercises || [];
-
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-      <div className="lg:col-span-2 space-y-6">
-        <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-6 relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-zinc-700 to-black"></div>
-          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-8 gap-4">
-            <h3 className="text-xl font-bold text-white tracking-wide">Daily Journal</h3>
-            <input 
-              type="date" 
-              value={date} 
-              onChange={e => setDate(e.target.value)}
-              className="bg-black border border-zinc-800 text-sm font-mono text-zinc-300 rounded-lg px-4 py-2 outline-none focus:border-zinc-500"
-            />
-          </div>
-
-          <div className="space-y-6">
-            <div>
-              <div className="flex justify-between items-center mb-3">
-                <label className="block text-xs font-bold tracking-widest text-zinc-500 uppercase">Nutrition Notes</label>
-                <button 
-                  onClick={handleAnalyzeDiet} 
-                  disabled={isAnalyzing || !food}
-                  className="text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors flex items-center disabled:opacity-50"
-                >
-                  <Sparkles size={14} className="mr-1"/> {isAnalyzing ? 'Analyzing...' : '✨ Analyze Diet'}
-                </button>
-              </div>
-              <textarea 
-                className="w-full bg-black border border-zinc-800 rounded-xl p-4 text-sm text-white placeholder-zinc-700 min-h-[140px] outline-none focus:border-zinc-600 transition-colors"
-                placeholder="List your meals, snacks, and water intake..."
-                value={food}
-                onChange={e => setFood(e.target.value)}
-              ></textarea>
-              
-              {aiAnalysis && (
-                <div className="mt-3 p-4 bg-emerald-950/20 border border-emerald-900/30 rounded-xl animate-in fade-in slide-in-from-top-2">
-                  <div className="flex items-center text-emerald-500 mb-2">
-                    <Bot size={16} className="mr-2"/>
-                    <span className="text-xs font-bold tracking-widest uppercase">AI Nutrition Coach</span>
-                  </div>
-                  <div className="text-sm text-zinc-300 whitespace-pre-wrap leading-relaxed">{aiAnalysis}</div>
-                </div>
-              )}
-            </div>
-            
-            <div>
-              <label className="block text-xs font-bold tracking-widest text-zinc-500 uppercase mb-3">Training Duration</label>
-              <div className="relative max-w-xs">
-                <input 
-                  type="number" 
-                  step="0.5" min="0"
-                  className="w-full bg-black border border-zinc-800 rounded-xl p-4 pr-12 text-sm text-white outline-none focus:border-zinc-600 transition-colors"
-                  value={hours}
-                  onChange={e => setHours(e.target.value)}
-                />
-                <div className="absolute inset-y-0 right-0 flex items-center pr-4 text-xs font-bold text-zinc-600 uppercase">Hours</div>
-              </div>
-            </div>
-
-            <button onClick={handleSave} disabled={isSaving} className="bg-white text-black text-sm font-bold tracking-widest uppercase px-8 py-4 rounded-xl hover:bg-zinc-200 transition-colors shadow-lg disabled:opacity-50">
-              {isSaving ? 'Saving to Cloud...' : 'Commit to Log'}
-            </button>
-          </div>
+    <div className="max-w-md mx-auto w-full pt-4 space-y-6">
+      <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-6 relative overflow-hidden">
+        <div className="flex justify-between items-center mb-6 border-b border-zinc-800 pb-4">
+          <h3 className="text-xl font-bold text-white tracking-wide">Daily Log</h3>
+          <input type="date" value={date} onChange={e => setDate(e.target.value)} className="bg-black border border-zinc-800 text-xs font-mono text-zinc-300 rounded-lg px-3 py-2 outline-none" />
         </div>
-      </div>
 
-      <div>
-        <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-6 h-full flex flex-col">
-          <h3 className="text-lg font-bold text-white mb-2 tracking-wide">Completed Workouts</h3>
-          <p className="text-xs text-zinc-500 mb-6 font-mono border-b border-zinc-800 pb-4">{date}</p>
-          
-          <div className="space-y-4 flex-1 overflow-y-auto pr-2">
-            {currentExercises.length > 0 ? currentExercises.map((ex, i) => (
-              <div key={i} className="flex items-start space-x-4 bg-black p-4 rounded-xl border border-zinc-800">
-                <CheckCircle size={18} className="text-zinc-400 mt-0.5 shrink-0" />
-                <div>
-                  <div className="text-sm font-bold text-white tracking-wide">{ex.title}</div>
-                  <div className="text-xs text-zinc-500 font-mono mt-1">{ex.sets} sets • {ex.rounds} rounds</div>
-                </div>
-              </div>
-            )) : (
-              <div className="flex flex-col items-center justify-center py-12 text-zinc-600 h-full">
-                <Dumbbell size={32} className="mb-4 opacity-30" />
-                <p className="text-xs font-bold tracking-widest uppercase text-center max-w-[200px]">No workouts logged for this date.</p>
-              </div>
-            )}
+        <div className="space-y-6">
+          {/* HABIT TRACKER */}
+          <div>
+             <label className="block text-[10px] font-bold tracking-widest text-zinc-500 uppercase mb-3">Daily Habits</label>
+             <div className="grid grid-cols-3 gap-2">
+                <button onClick={() => setWater(!water)} className={`flex flex-col items-center justify-center p-3 rounded-2xl border transition-colors ${water ? 'bg-blue-950/40 border-blue-500 text-blue-400' : 'bg-black border-zinc-800 text-zinc-600'}`}>
+                   <Droplets size={24} className="mb-2"/>
+                   <span className="text-[10px] font-bold uppercase tracking-wider">Water</span>
+                </button>
+                <button onClick={() => setStretch(!stretch)} className={`flex flex-col items-center justify-center p-3 rounded-2xl border transition-colors ${stretch ? 'bg-amber-950/40 border-amber-500 text-amber-400' : 'bg-black border-zinc-800 text-zinc-600'}`}>
+                   <PersonStanding size={24} className="mb-2"/>
+                   <span className="text-[10px] font-bold uppercase tracking-wider">Stretch</span>
+                </button>
+                <button onClick={() => setSleep(!sleep)} className={`flex flex-col items-center justify-center p-3 rounded-2xl border transition-colors ${sleep ? 'bg-purple-950/40 border-purple-500 text-purple-400' : 'bg-black border-zinc-800 text-zinc-600'}`}>
+                   <Moon size={24} className="mb-2"/>
+                   <span className="text-[10px] font-bold uppercase tracking-wider">Sleep</span>
+                </button>
+             </div>
           </div>
+
+          <div>
+            <label className="block text-[10px] font-bold tracking-widest text-zinc-500 uppercase mb-3">Nutrition Notes</label>
+            <textarea className="w-full bg-black border border-zinc-800 rounded-2xl p-4 text-sm text-white min-h-[100px] outline-none" placeholder="Meals, snacks, macros..." value={food} onChange={e => setFood(e.target.value)}></textarea>
+          </div>
+          
+          <div>
+            <label className="block text-[10px] font-bold tracking-widest text-zinc-500 uppercase mb-3">Training Hours</label>
+            <input type="number" step="0.5" min="0" className="w-full bg-black border border-zinc-800 rounded-2xl p-4 text-sm text-white outline-none" value={hours} onChange={e => setHours(e.target.value)} />
+          </div>
+
+          <button onClick={handleSave} disabled={isSaving} className="w-full bg-white text-black text-sm font-bold tracking-widest uppercase py-4 rounded-xl hover:bg-zinc-200 transition-colors shadow-lg">
+            {isSaving ? 'Saving...' : 'Commit to Log'}
+          </button>
         </div>
       </div>
     </div>
   );
 }
 
-function UserProfile({ user, logs }) {
+function UserProfile({ user, logs, appId, db }) {
   const [profile, setProfile] = useState(user.profile);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [aiInsights, setAiInsights] = useState('');
-  const [isGettingInsights, setIsGettingInsights] = useState(false);
+  const fileInputRef = useRef(null);
 
   const handleUpdate = async (e) => {
     e.preventDefault();
     if (!db) return;
     setIsUpdating(true);
     try {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'samfit_users', user.id), {
-        ...user,
-        profile
-      }, { merge: true });
-      alert('Profile updated and synced to cloud.');
-    } catch (err) {
-      alert("Error updating profile: " + err.message);
-    }
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'samfit_users', user.id), { ...user, profile }, { merge: true });
+      alert('Profile synced to cloud.');
+    } catch (err) { alert("Error updating: " + err.message); }
     setIsUpdating(false);
   };
 
-  const handleGetInsights = async () => {
-    setIsGettingInsights(true);
-    const totalWorkouts = userLogs.reduce((acc, log) => acc + (log.exercises?.length || 0), 0);
-    const totalHours = userLogs.reduce((acc, log) => acc + Number(log.hoursTrained || 0), 0);
-    const recentWeight = profile.weight;
+  const handlePhotoUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 800000) return alert("Photo too large! Please choose a smaller image.");
     
-    const prompt = `Client metrics: ${totalWorkouts} total workouts recorded, ${totalHours} total hours trained, current weight ${recentWeight}kg. Give a short, highly motivational 2-paragraph pep talk acting as their personal trainer from Sam Fit gym. Acknowledge their effort and give them a hype boost!`;
-    const response = await generateAIFeedback(prompt, "You are an elite, highly motivational personal trainer at Sam Fit gym. Use a hype, encouraging tone.");
-    setAiInsights(response);
-    setIsGettingInsights(false);
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const base64String = reader.result;
+      setProfile(prev => ({ ...prev, photo: base64String }));
+      
+      // Auto-save photo instantly
+      if (db) {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'samfit_users', user.id), {
+          ...user, profile: { ...profile, photo: base64String }
+        }, { merge: true });
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
-  const userLogs = logs.filter(l => l.userId === user.id).sort((a,b) => new Date(a.date) - new Date(b.date));
-  const recentLogs = userLogs.slice(-7); 
+  const userLogs = logs.filter(l => l.userId === user.id);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-      {/* Profile Form */}
-      <div className="lg:col-span-1 bg-zinc-950 border border-zinc-800 rounded-2xl p-6 relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-zinc-700 to-black"></div>
+    <div className="max-w-md mx-auto w-full pt-4 space-y-6">
+      <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-6 relative overflow-hidden">
         <div className="flex flex-col items-center mb-8 pt-4">
-          <div className="relative group cursor-pointer mb-6">
-            <div className="w-28 h-28 bg-black rounded-full border border-zinc-700 flex items-center justify-center overflow-hidden shadow-2xl">
+          {/* PROFILE PICTURE UPLOAD */}
+          <div className="relative group cursor-pointer mb-4" onClick={() => fileInputRef.current?.click()}>
+            <div className="w-28 h-28 bg-black rounded-full border-2 border-zinc-700 flex items-center justify-center overflow-hidden shadow-2xl relative">
               {profile.photo ? (
                 <img src={profile.photo} alt="Profile" className="w-full h-full object-cover" />
               ) : (
                 <User size={48} className="text-zinc-700" />
               )}
+              {/* Camera overlay */}
+              <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <Camera size={24} className="text-white"/>
+              </div>
             </div>
+            <input type="file" accept="image/*" ref={fileInputRef} onChange={handlePhotoUpload} className="hidden" />
           </div>
-          <h3 className="text-xl font-bold text-white tracking-wide">{profile.firstName || 'New'} {profile.lastName || 'Client'}</h3>
-          <p className="text-xs font-bold text-zinc-500 uppercase tracking-[0.2em] mt-2">Sam Fit Member</p>
+          <h3 className="text-2xl font-bold text-white tracking-wide">{profile.firstName || 'New'} {profile.lastName || 'Client'}</h3>
+          <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.2em] mt-2">Sam Fit Member</p>
         </div>
 
-        <form onSubmit={handleUpdate} className="space-y-5">
+        <form onSubmit={handleUpdate} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-[10px] font-bold tracking-widest text-zinc-500 uppercase mb-2">First Name</label>
-              <input type="text" className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-sm text-white focus:border-zinc-600 outline-none transition-colors" value={profile.firstName} onChange={e => setProfile({...profile, firstName: e.target.value})} />
+              <label className="block text-[10px] font-bold tracking-widest text-zinc-500 uppercase mb-2">First</label>
+              <input type="text" className="w-full bg-black border border-zinc-800 rounded-xl p-3 text-sm text-white outline-none" value={profile.firstName} onChange={e => setProfile({...profile, firstName: e.target.value})} />
             </div>
             <div>
-              <label className="block text-[10px] font-bold tracking-widest text-zinc-500 uppercase mb-2">Last Name</label>
-              <input type="text" className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-sm text-white focus:border-zinc-600 outline-none transition-colors" value={profile.lastName} onChange={e => setProfile({...profile, lastName: e.target.value})} />
+              <label className="block text-[10px] font-bold tracking-widest text-zinc-500 uppercase mb-2">Last</label>
+              <input type="text" className="w-full bg-black border border-zinc-800 rounded-xl p-3 text-sm text-white outline-none" value={profile.lastName} onChange={e => setProfile({...profile, lastName: e.target.value})} />
             </div>
           </div>
-
-          <div className="border-t border-zinc-900 pt-6 mt-6">
-            <h4 className="text-xs font-bold tracking-widest text-white uppercase mb-5 flex items-center"><Activity size={14} className="mr-2 text-zinc-500"/> Body Metrics</h4>
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div>
-                <label className="block text-[10px] font-bold tracking-widest text-zinc-500 uppercase mb-2">Height (M)</label>
-                <input type="number" min="0" step="1" className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-sm font-mono text-white focus:border-zinc-600 outline-none transition-colors" value={profile.heightM} onChange={e => setProfile({...profile, heightM: e.target.value})} />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold tracking-widest text-zinc-500 uppercase mb-2">Height (CM)</label>
-                <input type="number" min="0" max="99" className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-sm font-mono text-white focus:border-zinc-600 outline-none transition-colors" value={profile.heightCm} onChange={e => setProfile({...profile, heightCm: e.target.value})} />
-              </div>
+          <div className="grid grid-cols-3 gap-3 pt-4 border-t border-zinc-900">
+            <div>
+              <label className="block text-[10px] font-bold tracking-widest text-zinc-500 uppercase mb-2">H (M)</label>
+              <input type="number" className="w-full bg-black border border-zinc-800 rounded-xl p-3 text-sm text-white font-mono outline-none" value={profile.heightM} onChange={e => setProfile({...profile, heightM: e.target.value})} />
             </div>
             <div>
-              <label className="block text-[10px] font-bold tracking-widest text-zinc-500 uppercase mb-2">Weight (KG)</label>
-              <input type="number" step="0.1" className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-sm font-mono text-white focus:border-zinc-600 outline-none transition-colors" value={profile.weight} onChange={e => setProfile({...profile, weight: e.target.value})} />
+              <label className="block text-[10px] font-bold tracking-widest text-zinc-500 uppercase mb-2">H (CM)</label>
+              <input type="number" className="w-full bg-black border border-zinc-800 rounded-xl p-3 text-sm text-white font-mono outline-none" value={profile.heightCm} onChange={e => setProfile({...profile, heightCm: e.target.value})} />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold tracking-widest text-zinc-500 uppercase mb-2">W (KG)</label>
+              <input type="number" step="0.1" className="w-full bg-black border border-zinc-800 rounded-xl p-3 text-sm text-white font-mono outline-none" value={profile.weight} onChange={e => setProfile({...profile, weight: e.target.value})} />
             </div>
           </div>
-
-          <button type="submit" disabled={isUpdating} className="w-full bg-white text-black text-sm font-bold tracking-widest uppercase py-4 rounded-xl mt-8 hover:bg-zinc-200 transition-colors disabled:opacity-50">
-            {isUpdating ? 'Syncing...' : 'Update Metrics'}
+          <button type="submit" disabled={isUpdating} className="w-full bg-zinc-900 text-white border border-zinc-800 text-sm font-bold tracking-widest uppercase py-4 rounded-xl mt-4 hover:bg-zinc-800 transition-colors">
+            {isUpdating ? 'Syncing...' : 'Save Profile'}
           </button>
         </form>
       </div>
-
-      {/* Progress Chart & Stats */}
-      <div className="lg:col-span-2 space-y-6">
-        <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-6 lg:p-8">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
-            <h3 className="text-xl font-bold text-white flex items-center tracking-wide">
-              <TrendingUp size={20} className="mr-3 text-zinc-500" /> My Progress Tracker
-            </h3>
-            <button 
-              onClick={handleGetInsights}
-              disabled={isGettingInsights}
-              className="bg-zinc-900 border border-zinc-700 hover:border-zinc-500 text-white text-xs font-bold tracking-widest uppercase px-4 py-2 rounded-lg transition-all flex items-center disabled:opacity-50"
-            >
-              <Sparkles size={14} className="mr-2 text-amber-400"/>
-              {isGettingInsights ? 'Consulting Coach...' : '✨ Ask AI Coach'}
-            </button>
-          </div>
-          
-          {aiInsights && (
-            <div className="mb-8 p-5 bg-gradient-to-br from-zinc-900 to-black border border-zinc-800 rounded-xl relative overflow-hidden animate-in fade-in slide-in-from-top-2">
-              <div className="absolute -right-4 -top-4 opacity-5"><Bot size={100}/></div>
-              <div className="flex items-center text-amber-500 mb-3">
-                <Bot size={18} className="mr-2"/>
-                <span className="text-xs font-bold tracking-widest uppercase text-amber-500">Coach's Feedback</span>
-              </div>
-              <div className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap relative z-10">{aiInsights}</div>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
-             <div className="bg-black border border-zinc-800/50 p-6 rounded-xl">
-               <div className="text-[10px] font-bold tracking-widest text-zinc-500 uppercase mb-2">Current BMI</div>
-               <div className="text-3xl font-light text-white font-mono">
-                 {profile.heightM > 0 && profile.weight > 0 ? 
-                   (profile.weight / Math.pow(Number(profile.heightM) + Number(profile.heightCm)/100, 2)).toFixed(1) 
-                   : '--'}
-               </div>
-             </div>
-             <div className="bg-black border border-zinc-800/50 p-6 rounded-xl">
-               <div className="text-[10px] font-bold tracking-widest text-zinc-500 uppercase mb-2">Total Workouts</div>
-               <div className="text-3xl font-light text-white font-mono">{userLogs.reduce((acc, log) => acc + (log.exercises?.length || 0), 0)}</div>
-             </div>
-             <div className="bg-black border border-zinc-800/50 p-6 rounded-xl">
-               <div className="text-[10px] font-bold tracking-widest text-zinc-500 uppercase mb-2">Hours Trained</div>
-               <div className="text-3xl font-light text-white font-mono">{userLogs.reduce((acc, log) => acc + Number(log.hoursTrained || 0), 0)}</div>
-             </div>
-          </div>
-
-          <div className="bg-black border border-zinc-800 rounded-xl p-6 lg:p-8 relative">
-            <h4 className="text-[10px] font-bold tracking-widest text-zinc-500 mb-8 uppercase">Weight Trajectory</h4>
-            <div className="h-48 flex items-end justify-between space-x-2 md:space-x-6 w-full overflow-x-auto pb-4 pt-8 border-b border-zinc-900">
-              {recentLogs.length > 0 ? recentLogs.map((log, i) => {
-                const maxWeight = Math.max(...recentLogs.map(l => l.weightLog || 0), 100);
-                const heightPercentage = ((log.weightLog || 0) / maxWeight) * 100;
-                
-                return (
-                  <div key={i} className="flex flex-col items-center flex-1 min-w-[40px] group relative h-full justify-end">
-                    <div className="absolute -top-8 opacity-0 group-hover:opacity-100 bg-white text-black font-bold font-mono text-[10px] px-2 py-1 rounded transition-opacity z-10 whitespace-nowrap">
-                      {log.weightLog} kg
-                    </div>
-                    <div 
-                      className="w-full max-w-[40px] bg-zinc-800 group-hover:bg-zinc-500 transition-colors rounded-t" 
-                      style={{ height: `${heightPercentage}%`, minHeight: '10%' }}
-                    ></div>
-                    <span className="text-[10px] font-mono text-zinc-600 mt-3 whitespace-nowrap">{log.date.substring(5)}</span>
-                  </div>
-                );
-              }) : (
-                <div className="w-full h-full flex flex-col items-center justify-center text-zinc-600 text-sm absolute inset-0">
-                  <Activity size={32} className="mb-3 opacity-20"/>
-                  Log your journal daily to generate a chart.
-                </div>
-              )}
-            </div>
-          </div>
+      
+      {/* Mini Stats Summary */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-black border border-zinc-800 p-6 rounded-3xl text-center">
+           <div className="text-[10px] font-bold tracking-widest text-zinc-500 uppercase mb-2">Total Workouts</div>
+           <div className="text-3xl font-light text-white font-mono">{userLogs.reduce((acc, log) => acc + (log.exercises?.length || 0), 0)}</div>
+        </div>
+        <div className="bg-black border border-zinc-800 p-6 rounded-3xl text-center">
+           <div className="text-[10px] font-bold tracking-widest text-zinc-500 uppercase mb-2">Hours Trained</div>
+           <div className="text-3xl font-light text-white font-mono">{userLogs.reduce((acc, log) => acc + Number(log.hoursTrained || 0), 0)}</div>
         </div>
       </div>
     </div>
