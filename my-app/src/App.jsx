@@ -9,15 +9,26 @@ import {
   Pause, RotateCcw, Utensils, ChefHat, Image as ImageIcon,
   Edit2, Flame, ThumbsUp, ThumbsDown, Medal, Target
 } from 'lucide-react';
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
-import { getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
+import { getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc, query, where } from 'firebase/firestore';
 
-// --- GEMINI API CONFIG ---
+// --- SECURE API CONFIG ---
 const apiKey = "AIzaSyBwsnLQTWqG7YArJE4hkT8Jp27QQwUz2e4"; 
 
-// Generic Text Generation (Works perfectly for Coach Tips and Nutritionist)
+// --- IMAGE SANITIZER ---
+const getCleanImgUrl = (url) => {
+  if (!url) return '';
+  if (url.startsWith('[') && url.includes('](')) {
+    const match = url.match(/^\[(.*?)\]/);
+    return match ? match[1] : url;
+  }
+  return url;
+};
+
+// Generic Text Generation
 async function generateAIFeedback(prompt, systemInstruction) {
+  if (!apiKey) return "API Key missing.";
   try {
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
       method: 'POST',
@@ -36,52 +47,90 @@ async function generateAIFeedback(prompt, systemInstruction) {
   }
 }
 
+// Structured JSON Generation
+async function generateAIJSON(prompt) {
+  if (!apiKey) { alert("API Key missing."); return null; }
+  try {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt + "\n\nIMPORTANT: Return ONLY a raw JSON array. Do NOT wrap it in ```json or any other formatting." }] }]
+      })
+    });
+    const data = await response.json();
+    
+    if (data.error) {
+      alert("API Error: " + data.error.message);
+      return null;
+    }
+    
+    let text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) return null;
+
+    text = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+    const arrayStart = text.indexOf('[');
+    const arrayEnd = text.lastIndexOf(']');
+    
+    if (arrayStart !== -1 && arrayEnd !== -1) {
+      return JSON.parse(text.substring(arrayStart, arrayEnd + 1));
+    }
+    return JSON.parse(text);
+  } catch (err) {
+    console.error("AI JSON Gen Error:", err);
+    alert("AI formatting issue. Click generate again!");
+    return null;
+  }
+}
+
 // --- CONSTANTS ---
 const CATEGORIES = [
-  { name: "Tae bo", img: "https://images.unsplash.com/photo-1555597673-b21d5c935865?auto=format&fit=crop&w=600&q=80" },
-  { name: "Crossfit", img: "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=600&q=80" },
-  { name: "Body combat", img: "https://images.unsplash.com/photo-1599058917212-d750089bc07e?auto=format&fit=crop&w=600&q=80" },
-  { name: "Stick mobility", img: "https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=600&q=80" },
-  { name: "Functional flow", img: "https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?auto=format&fit=crop&w=600&q=80" },
-  { name: "Fitness", img: "https://images.unsplash.com/photo-1534258936925-c58bed479fcb?auto=format&fit=crop&w=600&q=80" },
-  { name: "Stretching", img: "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&w=600&q=80" } 
+  { name: "Tae bo", img: "[https://images.unsplash.com/photo-1555597673-b21d5c935865?w=800&q=80](https://images.unsplash.com/photo-1555597673-b21d5c935865?w=800&q=80)" },
+  { name: "Crossfit", img: "[https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=800&q=80](https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=800&q=80)" },
+  { name: "Body combat", img: "[https://images.unsplash.com/photo-1599058917212-d750089bc07e?w=800&q=80](https://images.unsplash.com/photo-1599058917212-d750089bc07e?w=800&q=80)" },
+  { name: "Stick mobility", img: "[https://images.unsplash.com/photo-1518611012118-696072aa579a?w=800&q=80](https://images.unsplash.com/photo-1518611012118-696072aa579a?w=800&q=80)" },
+  { name: "Functional flow", img: "[https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=800&q=80](https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=800&q=80)" },
+  { name: "Fitness", img: "[https://images.unsplash.com/photo-1534258936925-c58bed479fcb?w=800&q=80](https://images.unsplash.com/photo-1534258936925-c58bed479fcb?w=800&q=80)" },
+  { name: "Stretching", img: "[https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=800&q=80](https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=800&q=80)" } 
 ];
 
 const MEAL_CATEGORIES = [
-  { name: "Keto", img: "https://images.unsplash.com/photo-1473093295043-cdd812d0e601?auto=format&fit=crop&w=600&q=80" },
-  { name: "Vegan", img: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=600&q=80" },
-  { name: "Carnivore", img: "https://images.unsplash.com/photo-1600891964092-4316c288032e?auto=format&fit=crop&w=600&q=80" },
-  { name: "Mediterranean", img: "https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?auto=format&fit=crop&w=600&q=80" },
-  { name: "Pescatarian", img: "https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?auto=format&fit=crop&w=600&q=80" },
-  { name: "Lenten Fasting", img: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=600&q=80" }
+  { name: "Keto", img: "[https://images.unsplash.com/photo-1473093295043-cdd812d0e601?w=800&q=80](https://images.unsplash.com/photo-1473093295043-cdd812d0e601?w=800&q=80)" },
+  { name: "Vegan", img: "[https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800&q=80](https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800&q=80)" },
+  { name: "Carnivore", img: "[https://images.unsplash.com/photo-1600891964092-4316c288032e?w=800&q=80](https://images.unsplash.com/photo-1600891964092-4316c288032e?w=800&q=80)" },
+  { name: "Mediterranean", img: "[https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?w=800&q=80](https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?w=800&q=80)" },
+  { name: "Pescatarian", img: "[https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?w=800&q=80](https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?w=800&q=80)" },
+  { name: "Lenten Fasting", img: "[https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&q=80](https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&q=80)" }
 ];
 
 const FITNESS_GOALS = ["Weight Loss", "Muscle Gain", "Endurance & Stamina", "Flexibility & Mobility", "General Health"];
 
 // --- FIREBASE INITIALIZATION ---
-let app, auth, db, appId;
+const firebaseConfig = {
+  apiKey: "AIzaSyD3er01roP71kOET0ebyQyzJxfNcvHUWE8",
+  authDomain: "sam-fit-73b88.firebaseapp.com",
+  projectId: "sam-fit-73b88",
+  storageBucket: "sam-fit-73b88.firebasestorage.app",
+  messagingSenderId: "805503830384",
+  appId: "1:805503830384:web:d8eb1271e8f3f3425367b5"
+};
+
+const appId = 'samfit-live'; 
+let app, auth, db, secondaryApp, secondaryAuth;
 
 try {
-  const firebaseConfig = {
-    apiKey: "AIzaSyD3er01roP71kOET0ebyQyzJxfNcvHUWE8",
-    authDomain: "sam-fit-73b88.firebaseapp.com",
-    projectId: "sam-fit-73b88",
-    storageBucket: "sam-fit-73b88.firebasestorage.app",
-    messagingSenderId: "805503830384",
-    appId: "1:805503830384:web:d8eb1271e8f3f3425367b5"
-  };
-
-  appId = 'samfit-live'; 
-  app = initializeApp(firebaseConfig);
+  app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
   auth = getAuth(app);
   db = getFirestore(app);
+
+  secondaryApp = getApps().find(a => a.name === "SecondaryApp") || initializeApp(firebaseConfig, "SecondaryApp");
+  secondaryAuth = getAuth(secondaryApp);
 } catch (error) {
   console.error("Firebase init error:", error);
 }
 
 // --- MAIN APP COMPONENT ---
 export default function App() {
-  const [fbUser, setFbUser] = useState(null);
   const [isDbLoading, setIsDbLoading] = useState(true);
   
   const [users, setUsers] = useState([]);
@@ -93,7 +142,6 @@ export default function App() {
   const [authError, setAuthError] = useState('');
   const [sessionStartTime, setSessionStartTime] = useState(null);
 
-  // Global CSS to remove arrows from number inputs for the habit tracker
   useEffect(() => {
     const style = document.createElement('style');
     style.innerHTML = `
@@ -105,104 +153,102 @@ export default function App() {
 
     window.alert = (msg) => {
       const el = document.createElement('div');
-      el.className = 'fixed top-4 right-4 bg-zinc-900 border border-emerald-900/50 text-emerald-400 px-6 py-4 rounded-xl shadow-2xl z-[9999] font-sans text-sm tracking-wide transition-opacity duration-500';
+      el.className = 'fixed top-4 right-4 bg-zinc-900 border border-emerald-900/50 text-emerald-400 px-6 py-4 rounded-xl shadow-2xl z-[9999] font-sans text-sm tracking-wide transition-opacity duration-500 opacity-100';
       el.innerText = msg;
       document.body.appendChild(el);
-      setTimeout(() => { el.classList.add('opacity-0'); setTimeout(() => el.remove(), 500); }, 5000); 
+      setTimeout(() => { 
+        if(document.body.contains(el)) {
+           el.classList.replace('opacity-100', 'opacity-0'); 
+           setTimeout(() => { if(document.body.contains(el)) el.remove(); }, 500); 
+        }
+      }, 5000); 
     };
   }, []);
 
+  // Secure Auth State Listener
   useEffect(() => {
-    if (!auth) { setIsDbLoading(false); return; }
-    const initAuth = async () => {
-      try { await signInAnonymously(auth); } 
-      catch (err) { console.error("Auth Error:", err); setIsDbLoading(false); }
-    };
-    initAuth();
-    const unsubscribe = onAuthStateChanged(auth, user => { setFbUser(user); });
+    if (!auth || !db) return;
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        const userDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'samfit_users', user.uid);
+        onSnapshot(userDocRef, (docSnap) => {
+           if(docSnap.exists()) {
+              const userData = docSnap.data();
+              if(userData.active === false && userData.role !== 'admin') {
+                 signOut(auth);
+                 setAuthError("Your access has been revoked.");
+                 return;
+              }
+              setCurrentUser(userData);
+              if(!sessionStartTime) setSessionStartTime(Date.now());
+           }
+        });
+      } else {
+        setCurrentUser(null);
+        setSessionStartTime(null);
+      }
+      setIsDbLoading(false);
+    });
     return () => unsubscribe();
-  }, []);
+  }, [auth, db]);
 
+  // Secure Role-Based Data Fetching
   useEffect(() => {
-    if (!fbUser || !db) return;
+    if (!db) return;
 
-    const usersRef = collection(db, 'artifacts', appId, 'public', 'data', 'samfit_users');
     const exercisesRef = collection(db, 'artifacts', appId, 'public', 'data', 'samfit_exercises');
     const mealsRef = collection(db, 'artifacts', appId, 'public', 'data', 'samfit_meals');
-    const logsRef = collection(db, 'artifacts', appId, 'public', 'data', 'samfit_logs');
-    const feedbackRef = collection(db, 'artifacts', appId, 'public', 'data', 'samfit_feedbacks');
+    const unsubEx = onSnapshot(exercisesRef, snap => setExercises(snap.docs.map(d => d.data())));
+    const unsubMeals = onSnapshot(mealsRef, snap => setMeals(snap.docs.map(d => d.data())));
 
-    let uLoaded = false, eLoaded = false, mLoaded = false, lLoaded = false, fLoaded = false;
-    const checkLoaded = () => { if (uLoaded && eLoaded && mLoaded && lLoaded && fLoaded) setIsDbLoading(false); };
+    let unsubUsers = () => {};
+    let unsubLogs = () => {};
+    let unsubFb = () => {};
 
-    const unsubUsers = onSnapshot(usersRef, (snap) => {
-      const data = snap.docs.map(d => d.data());
-      setUsers(data);
-      if (!currentUser && fbUser) {
-        const matchingUser = data.find(u => u.firebaseUid === fbUser.uid);
-        if (matchingUser && matchingUser.active) {
-          loginProcess(matchingUser);
-        }
+    if (currentUser) {
+      if (currentUser.role === 'admin') {
+        const usersRef = collection(db, 'artifacts', appId, 'public', 'data', 'samfit_users');
+        const logsRef = collection(db, 'artifacts', appId, 'public', 'data', 'samfit_logs');
+        const fbRef = collection(db, 'artifacts', appId, 'public', 'data', 'samfit_feedbacks');
+        
+        unsubUsers = onSnapshot(usersRef, snap => setUsers(snap.docs.map(d => d.data())));
+        unsubLogs = onSnapshot(logsRef, snap => setLogs(snap.docs.map(d => d.data())));
+        unsubFb = onSnapshot(fbRef, snap => setFeedbacks(snap.docs.map(d => d.data())));
+      } else {
+        const logsRef = collection(db, 'artifacts', appId, 'public', 'data', 'samfit_logs');
+        const logsQ = query(logsRef, where("userId", "==", currentUser.id));
+        
+        const fbRef = collection(db, 'artifacts', appId, 'public', 'data', 'samfit_feedbacks');
+        const fbQ = query(fbRef, where("userId", "==", currentUser.id));
+
+        unsubLogs = onSnapshot(logsQ, snap => setLogs(snap.docs.map(d => d.data())));
+        unsubFb = onSnapshot(fbQ, snap => setFeedbacks(snap.docs.map(d => d.data())));
+        
+        setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'samfit_users', currentUser.id), { lastLogin: Date.now() }, { merge: true }).catch(()=>{});
       }
-      uLoaded = true; checkLoaded();
-    });
-
-    const unsubEx = onSnapshot(exercisesRef, (snap) => { setExercises(snap.docs.map(d => d.data())); eLoaded = true; checkLoaded(); });
-    const unsubMeals = onSnapshot(mealsRef, (snap) => { setMeals(snap.docs.map(d => d.data())); mLoaded = true; checkLoaded(); });
-    const unsubLogs = onSnapshot(logsRef, (snap) => { setLogs(snap.docs.map(d => d.data())); lLoaded = true; checkLoaded(); });
-    const unsubFb = onSnapshot(feedbackRef, (snap) => { setFeedbacks(snap.docs.map(d => d.data())); fLoaded = true; checkLoaded(); });
-
-    return () => { unsubUsers(); unsubEx(); unsubMeals(); unsubLogs(); unsubFb(); };
-  }, [fbUser]); 
-
-  const loginProcess = async (userObj) => {
-    setCurrentUser(userObj);
-    // Update last login timestamp in the background
-    if (userObj.role !== 'admin' && db) {
-      try {
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'samfit_users', userObj.id), { ...userObj, lastLogin: Date.now() }, { merge: true });
-      } catch (e) { console.error(e); }
     }
-  };
 
-  const handleLogin = async (username, password, rememberMe) => {
+    return () => { unsubEx(); unsubMeals(); unsubUsers(); unsubLogs(); unsubFb(); };
+  }, [db, currentUser?.id, currentUser?.role]); 
+
+  const handleLogin = async (email, password) => {
     setAuthError('');
-    
-    // HARDCODED ADMIN MASTER KEY
-    if (username.toLowerCase() === 'samfit' && password === 'Sammassam') {
-      setCurrentUser({ id: 'admin_master', username: 'Samfit', role: 'admin', active: true });
-      return;
-    }
-
-    const user = users.find(u => u.username === username && u.password === password);
-    if (user) {
-      if (!user.active && user.role !== 'admin') {
-        setAuthError("Your access has been revoked.");
-        return;
-      }
-      if (rememberMe && fbUser && db) {
-        try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'samfit_users', user.id), { ...user, firebaseUid: fbUser.uid }, { merge: true }); } 
-        catch (err) { console.error("Failed to save remember me state", err); }
-      }
-      loginProcess(user);
-      setSessionStartTime(Date.now());
-    } else {
-      setAuthError("Invalid credentials.");
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (err) {
+      setAuthError("Invalid credentials or account does not exist.");
     }
   };
 
   const handleLogout = async () => {
-    if (currentUser && currentUser.firebaseUid && db && currentUser.role !== 'admin') {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'samfit_users', currentUser.id), { ...currentUser, firebaseUid: null }, { merge: true });
-    }
+    await signOut(auth);
     setCurrentUser(null);
-    setSessionStartTime(null);
   };
 
   if (isDbLoading) {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center text-white">
-        <img src="https://samfit.co/logo.png" alt="Sam Fit" className="h-20 w-20 animate-pulse rounded-full border border-zinc-700 mb-6 object-cover" onError={(e) => { e.target.style.display='none'; }}/>
+        <img src={getCleanImgUrl("[https://samfit.co/logo.png](https://samfit.co/logo.png)")} alt="Sam Fit" className="h-20 w-20 animate-pulse rounded-full border border-zinc-700 mb-6 object-cover" onError={(e) => { e.target.style.display='none'; }}/>
         <p className="text-zinc-500 uppercase tracking-widest text-sm animate-pulse">Loading Workspace...</p>
       </div>
     );
@@ -220,12 +266,12 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-3">
-              <img src="https://samfit.co/logo.png" alt="Sam Fit Logo" className="h-10 w-10 rounded-full object-cover border border-zinc-700 bg-black" onError={(e) => { e.target.style.display='none'; }} />
+              <img src={getCleanImgUrl("[https://samfit.co/logo.png](https://samfit.co/logo.png)")} alt="Sam Fit Logo" className="h-10 w-10 rounded-full object-cover border border-zinc-700 bg-black" onError={(e) => { e.target.style.display='none'; }} />
               <span className="text-xl font-bold tracking-[0.2em] uppercase text-white">Sam Fit</span>
             </div>
             <div className="flex items-center space-x-4">
               <span className="text-sm text-zinc-400 hidden sm:block">
-                Logged in as <strong className="text-zinc-100">{currentUser.role === 'admin' ? 'Admin' : (currentUser.profile?.firstName || currentUser.username)}</strong>
+                Logged in as <strong className="text-zinc-100">{currentUser.role === 'admin' ? 'Admin' : (currentUser.profile?.firstName || currentUser.email)}</strong>
               </span>
               <button onClick={handleLogout} className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full transition-colors border border-transparent hover:border-zinc-800">
                 <LogOut size={18} />
@@ -237,9 +283,9 @@ export default function App() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {currentUser.role === 'admin' ? (
-          <AdminDashboard users={users} logs={logs} exercises={exercises} meals={meals} feedbacks={feedbacks} />
+          <AdminDashboard users={users} logs={logs} exercises={exercises} meals={meals} feedbacks={feedbacks} secondaryAuth={secondaryAuth} db={db} appId={appId} />
         ) : (
-          <UserDashboard user={currentUser} users={users} exercises={exercises} meals={meals} logs={logs} sessionStartTime={sessionStartTime} />
+          <UserDashboard user={currentUser} exercises={exercises} meals={meals} logs={logs} sessionStartTime={sessionStartTime} db={db} appId={appId} />
         )}
       </main>
     </div>
@@ -252,6 +298,9 @@ function OnboardingScreen({ user, db, appId }) {
   const [heightM, setHeightM] = useState('1');
   const [heightCm, setHeightCm] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const isMounted = useRef(true);
+
+  useEffect(() => { return () => { isMounted.current = false; }; }, []);
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -263,11 +312,14 @@ function OnboardingScreen({ user, db, appId }) {
         profile: { ...user.profile, weight: Number(weight), heightM: Number(heightM), heightCm: Number(heightCm), fitnessGoal: FITNESS_GOALS[0] }
       }, { merge: true });
     } catch(err) { alert("Error saving profile"); }
-    setIsSaving(false);
+    if(isMounted.current) setIsSaving(false);
   };
 
   return (
-    <div className="min-h-screen bg-black flex flex-col justify-center items-center px-4 bg-[url('https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?auto=format&fit=crop&w=2000&q=80')] bg-cover bg-center">
+    <div 
+      className="min-h-screen bg-black flex flex-col justify-center items-center px-4 bg-cover bg-center"
+      style={{ backgroundImage: `url('https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=2000&q=80')` }}
+    >
       <div className="absolute inset-0 bg-black/90 backdrop-blur-md"></div>
       <div className="w-full max-w-md bg-zinc-950 border border-zinc-800 rounded-3xl p-8 relative z-10 shadow-2xl">
         <h2 className="text-2xl font-bold text-white uppercase tracking-widest mb-2 text-center">Welcome to Sam Fit</h2>
@@ -299,36 +351,29 @@ function OnboardingScreen({ user, db, appId }) {
 
 // --- LOGIN SCREEN ---
 function LoginScreen({ onLogin, error }) {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(false);
 
   return (
-    <div className="min-h-screen bg-black flex flex-col justify-center items-center px-4 bg-[url('https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=2000&q=80')] bg-cover bg-center">
+    <div 
+      className="min-h-screen bg-black flex flex-col justify-center items-center px-4 bg-cover bg-center"
+      style={{ backgroundImage: `url('https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=2000&q=80')` }}
+    >
       <div className="absolute inset-0 bg-black/85 backdrop-blur-sm"></div>
       
       <div className="w-full max-w-md bg-zinc-950/90 border border-zinc-800 rounded-3xl shadow-2xl overflow-hidden relative z-10">
         <div className="p-8 pb-10">
           <div className="flex justify-center mb-6">
-             <img src="https://samfit.co/logo.png" alt="Sam Fit" className="h-28 w-28 rounded-full border border-zinc-700 bg-black object-cover shadow-[0_0_30px_rgba(255,255,255,0.05)]" onError={(e) => { e.target.style.display='none'; }} />
+             <img src={getCleanImgUrl("[https://samfit.co/logo.png](https://samfit.co/logo.png)")} alt="Sam Fit" className="h-28 w-28 rounded-full border border-zinc-700 bg-black object-cover shadow-[0_0_30px_rgba(255,255,255,0.05)]" onError={(e) => { e.target.style.display='none'; }} />
           </div>
           <h2 className="text-2xl font-bold text-center text-white uppercase tracking-[0.2em]">Sam Fit Portal</h2>
           <p className="text-center text-zinc-500 text-xs tracking-[0.3em] uppercase mt-2 mb-8 font-bold">By Athletes, For Athletes</p>
           
           {error && <div className="bg-red-950/50 border border-red-900/50 text-red-400 text-xs font-bold tracking-widest uppercase p-4 rounded-lg mb-6 text-center">{error}</div>}
           
-          <form onSubmit={(e) => { e.preventDefault(); onLogin(username, password, rememberMe); }} className="space-y-5">
-            <input type="text" className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-4 text-white focus:outline-none focus:border-zinc-500 transition-colors placeholder-zinc-600 text-sm" placeholder="USERNAME" value={username} onChange={e => setUsername(e.target.value)} required />
+          <form onSubmit={(e) => { e.preventDefault(); onLogin(email, password); }} className="space-y-5">
+            <input type="email" className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-4 text-white focus:outline-none focus:border-zinc-500 transition-colors placeholder-zinc-600 text-sm" placeholder="EMAIL ADDRESS" value={email} onChange={e => setEmail(e.target.value)} required />
             <input type="password" className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-4 text-white focus:outline-none focus:border-zinc-500 transition-colors placeholder-zinc-600 text-sm" placeholder="PASSWORD" value={password} onChange={e => setPassword(e.target.value)} required />
-            
-            <div className="flex items-center justify-between px-1">
-              <label className="flex items-center space-x-3 cursor-pointer group" onClick={() => setRememberMe(!rememberMe)}>
-                <div className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${rememberMe ? 'bg-white border-white' : 'bg-black border-zinc-600 group-hover:border-zinc-400'}`}>
-                  {rememberMe && <CheckCircle size={14} className="text-black" />}
-                </div>
-                <span className="text-xs font-bold tracking-wider text-zinc-400 uppercase group-hover:text-white transition-colors">Remember Me</span>
-              </label>
-            </div>
 
             <button type="submit" className="w-full bg-white text-black font-bold uppercase tracking-widest py-4 rounded-xl hover:bg-zinc-200 transition-colors shadow-lg mt-4 text-sm">
               Enter Arena
@@ -341,7 +386,7 @@ function LoginScreen({ onLogin, error }) {
 }
 
 // --- ADMIN DASHBOARD ---
-function AdminDashboard({ users, logs, exercises, meals, feedbacks }) {
+function AdminDashboard({ users, logs, exercises, meals, feedbacks, secondaryAuth, db, appId }) {
   const [activeTab, setActiveTab] = useState('users');
   const clients = users.filter(u => u.role === 'user');
 
@@ -360,31 +405,35 @@ function AdminDashboard({ users, logs, exercises, meals, feedbacks }) {
         ))}
       </div>
 
-      {activeTab === 'users' && <AdminUserManagement users={clients} />}
-      {activeTab === 'exercises' && <AdminExerciseManagement exercises={exercises} />}
-      {activeTab === 'meals' && <AdminMealManagement meals={meals} />}
-      {activeTab === 'analytics' && <AdminAnalytics clients={clients} logs={logs} feedbacks={feedbacks} />}
+      {activeTab === 'users' && <AdminUserManagement users={clients} secondaryAuth={secondaryAuth} db={db} appId={appId} />}
+      {activeTab === 'exercises' && <AdminExerciseManagement exercises={exercises} db={db} appId={appId} />}
+      {activeTab === 'meals' && <AdminMealManagement meals={meals} db={db} appId={appId} />}
+      {activeTab === 'analytics' && <AdminAnalytics clients={clients} logs={logs} feedbacks={feedbacks} db={db} appId={appId} />}
     </div>
   );
 }
 
-function AdminUserManagement({ users }) {
-  const [newUsername, setNewUsername] = useState('');
+function AdminUserManagement({ users, secondaryAuth, db, appId }) {
+  const [newEmail, setNewEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [gender, setGender] = useState('Male');
   const [age, setAge] = useState('');
 
   const handleAddUser = async (e) => {
     e.preventDefault();
-    if (!newUsername || !newPassword || !age || !db) return;
-    const newUserId = 'user_' + Date.now();
+    if (!newEmail || !newPassword || !age || !db) return;
     try {
+      const userCredential = await createUserWithEmailAndPassword(secondaryAuth, newEmail, newPassword);
+      await signOut(secondaryAuth);
+      const newUserId = userCredential.user.uid;
+
       await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'samfit_users', newUserId), {
-        id: newUserId, username: newUsername, password: newPassword, role: 'user', active: true,
-        adminData: { gender, age: Number(age) }, // Private admin notes
-        profile: { firstName: '', lastName: '', heightM: 0, heightCm: 0, weight: 0, photo: '', fitnessGoal: FITNESS_GOALS[0] }
+        id: newUserId, email: newEmail, role: 'user', active: true,
+        adminData: { gender, age: Number(age) }, 
+        profile: { firstName: '', lastName: '', heightM: 0, heightCm: 0, weight: 0, photo: '', fitnessGoal: FITNESS_GOALS[0] },
+        lastLogin: null
       });
-      setNewUsername(''); setNewPassword(''); setAge(''); alert("Client added successfully!");
+      setNewEmail(''); setNewPassword(''); setAge(''); alert("Client added successfully!");
     } catch (err) { alert("Error adding user: " + err.message); }
   };
 
@@ -394,7 +443,6 @@ function AdminUserManagement({ users }) {
     catch (err) { alert("Error updating access: " + err.message); }
   };
 
-  // Helper to determine Activity status
   const getActivityStatus = (lastLogin) => {
     if (!lastLogin) return <span className="text-zinc-500 font-mono">Never logged in</span>;
     const daysInactive = Math.floor((Date.now() - lastLogin) / 86400000);
@@ -407,8 +455,8 @@ function AdminUserManagement({ users }) {
       <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-6 h-fit">
         <h3 className="text-lg font-bold text-white mb-6 flex items-center"><Plus size={18} className="mr-2 text-zinc-400"/> Create Client</h3>
         <form onSubmit={handleAddUser} className="space-y-4">
-          <input type="text" className="w-full bg-black border border-zinc-800 rounded-lg px-4 py-3 text-sm text-white" value={newUsername} onChange={e => setNewUsername(e.target.value)} required placeholder="Username" />
-          <input type="text" className="w-full bg-black border border-zinc-800 rounded-lg px-4 py-3 text-sm text-white" value={newPassword} onChange={e => setNewPassword(e.target.value)} required placeholder="Password" />
+          <input type="email" className="w-full bg-black border border-zinc-800 rounded-lg px-4 py-3 text-sm text-white" value={newEmail} onChange={e => setNewEmail(e.target.value)} required placeholder="Client Email" />
+          <input type="text" className="w-full bg-black border border-zinc-800 rounded-lg px-4 py-3 text-sm text-white" value={newPassword} onChange={e => setNewPassword(e.target.value)} required placeholder="Temporary Password" />
           <div className="grid grid-cols-2 gap-3 pt-2 border-t border-zinc-900">
              <div>
                <label className="block text-[10px] font-bold text-zinc-500 uppercase mb-2">Gender (Admin Only)</label>
@@ -432,14 +480,14 @@ function AdminUserManagement({ users }) {
             <div key={u.id} className="p-6 flex flex-col sm:flex-row sm:items-center justify-between hover:bg-zinc-900/80 gap-4">
               <div className="flex items-center space-x-4">
                 <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg border overflow-hidden shrink-0 ${u.active ? 'bg-zinc-900 border-zinc-700 text-white' : 'bg-red-950/30 border-red-900/50 text-red-500'}`}>
-                  {u.profile?.photo ? <img src={u.profile.photo} className="w-full h-full object-cover"/> : (u.profile?.firstName ? u.profile.firstName.charAt(0).toUpperCase() : u.username.charAt(0).toUpperCase())}
+                  {u.profile?.photo ? <img src={getCleanImgUrl(u.profile.photo)} className="w-full h-full object-cover"/> : (u.profile?.firstName ? u.profile.firstName.charAt(0).toUpperCase() : <User size={20}/>)}
                 </div>
                 <div>
                   <div className="text-white font-medium flex items-center">
                     {u.profile?.firstName} {u.profile?.lastName} 
                     {u.adminData && <span className="ml-2 px-2 py-0.5 rounded bg-zinc-800 text-[10px] font-bold text-zinc-400">{u.adminData.gender} • {u.adminData.age}y</span>}
                   </div>
-                  <div className="text-xs text-zinc-500 font-mono mt-1">User: <span className="text-zinc-300">{u.username}</span> | Pass: <span className="text-zinc-300">{u.password}</span></div>
+                  <div className="text-xs text-zinc-500 font-mono mt-1">Email: <span className="text-zinc-300">{u.email}</span></div>
                   <div className="text-xs mt-1">{getActivityStatus(u.lastLogin)}</div>
                 </div>
               </div>
@@ -454,7 +502,7 @@ function AdminUserManagement({ users }) {
   );
 }
 
-function AdminExerciseManagement({ exercises }) {
+function AdminExerciseManagement({ exercises, db, appId }) {
   const [editId, setEditId] = useState(null);
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState(CATEGORIES[0].name);
@@ -500,7 +548,6 @@ function AdminExerciseManagement({ exercises }) {
     } catch (err) { alert("Error saving exercise: " + err.message); }
   };
 
-  // HARDCODED MASS GENERATOR (100% RELIABLE)
   const seedWorkoutLibrary = async () => {
     if (!db || !window.confirm("Instantly add 10 structured workouts to all 7 categories (70 Total)?")) return;
     setIsGeneratingLibrary(true);
@@ -513,11 +560,11 @@ function AdminExerciseManagement({ exercises }) {
           const id = `ex_auto_${cat.name.replace(/\s+/g, '')}_${i}_${Date.now()}`;
           await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'samfit_exercises', id), {
             id: id, 
-            title: `${templates[i]}`, // Only the name, no category prefix!
+            title: `${templates[i]}`, 
             category: cat.name, 
             instructions: `1. Warm up thoroughly.\n2. Focus on proper form and controlled breathing.\n3. Complete specified sets and rounds.\n4. Stay hydrated.`, 
-            intensity: i % 2 === 0 ? "High" : "Low", // Alternates High and Low
-            duration: String(15 + (i * 5)), // Alternates durations (15, 20, 25...)
+            intensity: i % 2 === 0 ? "High" : "Low",
+            duration: String(15 + (i * 5)),
             videoUrl: ''
           });
         }
@@ -622,7 +669,7 @@ function AdminExerciseManagement({ exercises }) {
   );
 }
 
-function AdminMealManagement({ meals }) {
+function AdminMealManagement({ meals, db, appId }) {
   const [editId, setEditId] = useState(null);
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState(MEAL_CATEGORIES[0].name);
@@ -645,13 +692,12 @@ function AdminMealManagement({ meals }) {
     const saveId = editId || ('meal_' + Date.now());
     try {
       await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'samfit_meals', saveId), { 
-        id: saveId, title, category, instructions, imageUrl: imageUrl || 'https://images.unsplash.com/photo-1490645935967-10de6ba17061?auto=format&fit=crop&w=600&q=80' 
+        id: saveId, title, category, instructions, imageUrl: imageUrl || '[https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=800&q=80](https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=800&q=80)' 
       }, { merge: true });
       cancelEdit(); alert(editId ? "Recipe updated!" : "Meal added successfully!");
     } catch (err) { alert("Error saving meal: " + err.message); }
   };
 
-  // HARDCODED MASS GENERATOR (100% RELIABLE)
   const seedMealLibrary = async () => {
     if (!db || !window.confirm("Instantly add 5 healthy recipes to all diet categories (30 Total)?")) return;
     setIsGeneratingLibrary(true);
@@ -666,18 +712,17 @@ function AdminMealManagement({ meals }) {
     };
 
     const photoBanks = {
-      "Keto": ["https://images.unsplash.com/photo-1473093295043-cdd812d0e601?w=600", "https://images.unsplash.com/photo-1603048297172-c92544798d5e?w=600", "https://images.unsplash.com/photo-1544025162-811114cd3543?w=600", "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=600", "https://images.unsplash.com/photo-1432139555190-58524dae6a5a?w=600"],
-      "Vegan": ["https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=600", "https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=600", "https://images.unsplash.com/photo-1540420773420-3366772f4999?w=600", "https://images.unsplash.com/photo-1482049016688-2d3e1b311543?w=600", "https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=600"],
-      "Carnivore": ["https://images.unsplash.com/photo-1600891964092-4316c288032e?w=600", "https://images.unsplash.com/photo-1544025162-811114cd3543?w=600", "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=600", "https://images.unsplash.com/photo-1615937657715-bc7b4b7962c1?w=600", "https://images.unsplash.com/photo-1529692236671-f1f6cf9683ba?w=600"],
-      "Mediterranean": ["https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?w=600", "https://images.unsplash.com/photo-1529059997568-3d847b1154f0?w=600", "https://images.unsplash.com/photo-1505253716362-afaea1d3d1af?w=600", "https://images.unsplash.com/photo-1528699633788-424224dc89b5?w=600", "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=600"],
-      "Pescatarian": ["https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?w=600", "https://images.unsplash.com/photo-1559742811-822873691df8?w=600", "https://images.unsplash.com/photo-1498654896293-37aacf113fd9?w=600", "https://images.unsplash.com/photo-1599084990807-3344d3148963?w=600", "https://images.unsplash.com/photo-1615141982883-c7da0e698b0b?w=600"],
-      "Lenten Fasting": ["https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600", "https://images.unsplash.com/photo-1511690656952-34342bb7c2f2?w=600", "https://images.unsplash.com/photo-1520072959219-c595dc870360?w=600", "https://images.unsplash.com/photo-1542528180-a1208c5169a5?w=600", "https://images.unsplash.com/photo-1505253716362-afaea1d3d1af?w=600"]
+      "Keto": ["[https://images.unsplash.com/photo-1473093295043-cdd812d0e601?w=800&q=80](https://images.unsplash.com/photo-1473093295043-cdd812d0e601?w=800&q=80)", "[https://images.unsplash.com/photo-1603048297172-c92544798d5e?w=800&q=80](https://images.unsplash.com/photo-1603048297172-c92544798d5e?w=800&q=80)", "[https://images.unsplash.com/photo-1544025162-811114cd3543?w=800&q=80](https://images.unsplash.com/photo-1544025162-811114cd3543?w=800&q=80)", "[https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=80](https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=80)", "[https://images.unsplash.com/photo-1432139555190-58524dae6a5a?w=800&q=80](https://images.unsplash.com/photo-1432139555190-58524dae6a5a?w=800&q=80)"],
+      "Vegan": ["[https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800&q=80](https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800&q=80)", "[https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=800&q=80](https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=800&q=80)", "[https://images.unsplash.com/photo-1540420773420-3366772f4999?w=800&q=80](https://images.unsplash.com/photo-1540420773420-3366772f4999?w=800&q=80)", "[https://images.unsplash.com/photo-1482049016688-2d3e1b311543?w=800&q=80](https://images.unsplash.com/photo-1482049016688-2d3e1b311543?w=800&q=80)", "[https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=800&q=80](https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=800&q=80)"],
+      "Carnivore": ["[https://images.unsplash.com/photo-1600891964092-4316c288032e?w=800&q=80](https://images.unsplash.com/photo-1600891964092-4316c288032e?w=800&q=80)", "[https://images.unsplash.com/photo-1544025162-811114cd3543?w=800&q=80](https://images.unsplash.com/photo-1544025162-811114cd3543?w=800&q=80)", "[https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=80](https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=80)", "[https://images.unsplash.com/photo-1615937657715-bc7b4b7962c1?w=800&q=80](https://images.unsplash.com/photo-1615937657715-bc7b4b7962c1?w=800&q=80)", "[https://images.unsplash.com/photo-1529692236671-f1f6cf9683ba?w=800&q=80](https://images.unsplash.com/photo-1529692236671-f1f6cf9683ba?w=800&q=80)"],
+      "Mediterranean": ["[https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?w=800&q=80](https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?w=800&q=80)", "[https://images.unsplash.com/photo-1529059997568-3d847b1154f0?w=800&q=80](https://images.unsplash.com/photo-1529059997568-3d847b1154f0?w=800&q=80)", "[https://images.unsplash.com/photo-1505253716362-afaea1d3d1af?w=800&q=80](https://images.unsplash.com/photo-1505253716362-afaea1d3d1af?w=800&q=80)", "[https://images.unsplash.com/photo-1528699633788-424224dc89b5?w=800&q=80](https://images.unsplash.com/photo-1528699633788-424224dc89b5?w=800&q=80)", "[https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=80](https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=80)"],
+      "Pescatarian": ["[https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?w=800&q=80](https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?w=800&q=80)", "[https://images.unsplash.com/photo-1559742811-822873691df8?w=800&q=80](https://images.unsplash.com/photo-1559742811-822873691df8?w=800&q=80)", "[https://images.unsplash.com/photo-1498654896293-37aacf113fd9?w=800&q=80](https://images.unsplash.com/photo-1498654896293-37aacf113fd9?w=800&q=80)", "[https://images.unsplash.com/photo-1599084990807-3344d3148963?w=800&q=80](https://images.unsplash.com/photo-1599084990807-3344d3148963?w=800&q=80)", "[https://images.unsplash.com/photo-1615141982883-c7da0e698b0b?w=800&q=80](https://images.unsplash.com/photo-1615141982883-c7da0e698b0b?w=800&q=80)"],
+      "Lenten Fasting": ["[https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&q=80](https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&q=80)", "[https://images.unsplash.com/photo-1511690656952-34342bb7c2f2?w=800&q=80](https://images.unsplash.com/photo-1511690656952-34342bb7c2f2?w=800&q=80)", "[https://images.unsplash.com/photo-1520072959219-c595dc870360?w=800&q=80](https://images.unsplash.com/photo-1520072959219-c595dc870360?w=800&q=80)", "[https://images.unsplash.com/photo-1542528180-a1208c5169a5?w=800&q=80](https://images.unsplash.com/photo-1542528180-a1208c5169a5?w=800&q=80)", "[https://images.unsplash.com/photo-1505253716362-afaea1d3d1af?w=800&q=80](https://images.unsplash.com/photo-1505253716362-afaea1d3d1af?w=800&q=80)"]
     };
 
     const recipeText = `Ingredients:\n- 1 main protein/base\n- 2 cups fresh vegetables\n- 1 tbsp healthy fats (olive oil/avocado)\n- Spices to taste\n\nDirections:\n1. Prep ingredients and heat your pan.\n2. Cook the base until done.\n3. Serve fresh and enjoy your healthy meal!`;
 
     try {
-      let catIndex = 0;
       for (const cat of MEAL_CATEGORIES) {
         for (let i = 0; i < 5; i++) { 
           const id = `meal_auto_${cat.name.replace(/\s+/g, '')}_${i}_${Date.now()}`;
@@ -686,7 +731,6 @@ function AdminMealManagement({ meals }) {
             id: id, title: templates[cat.name][i], category: cat.name, instructions: recipeText, imageUrl: assignedImage
           });
         }
-        catIndex++;
       }
       alert(`Success! Generated 30 healthy meals.`);
     } catch (err) { alert("Error generating meals: " + err.message); }
@@ -750,7 +794,7 @@ function AdminMealManagement({ meals }) {
             <div key={m.id} className="p-4 flex items-center justify-between hover:bg-zinc-900/80">
               <div className="flex items-center space-x-4">
                 <div className="w-12 h-12 bg-black rounded-lg overflow-hidden border border-zinc-800 shrink-0">
-                  <img src={m.imageUrl} className="w-full h-full object-cover"/>
+                  <img src={getCleanImgUrl(m.imageUrl)} className="w-full h-full object-cover"/>
                 </div>
                 <div>
                   <div className="text-white font-medium">{m.title}</div>
@@ -769,7 +813,7 @@ function AdminMealManagement({ meals }) {
   );
 }
 
-function AdminAnalytics({ clients, logs, feedbacks }) {
+function AdminAnalytics({ clients, logs, feedbacks, db, appId }) {
   const [selectedUserId, setSelectedUserId] = useState(clients[0]?.id || null);
   const [coachNote, setCoachNote] = useState('');
   
@@ -789,14 +833,11 @@ function AdminAnalytics({ clients, logs, feedbacks }) {
     } catch(err) { alert("Error saving note."); }
   };
 
-  // Weekly calculations
   const last7DaysLogs = [...userLogs].reverse().slice(0, 7);
   const weeklyWorkouts = last7DaysLogs.reduce((acc, log) => acc + (log.exercises?.length || 0), 0);
   const weeklyWater = last7DaysLogs.reduce((acc, log) => acc + Number(log.water || 0), 0);
   const weeklySleep = last7DaysLogs.reduce((acc, log) => acc + Number(log.sleep || 0), 0);
   const avgSleep = last7DaysLogs.length > 0 ? (weeklySleep / last7DaysLogs.length).toFixed(1) : 0;
-
-  const chartLogs = userLogs.filter(l => l.weightLog > 0).slice(-10);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
@@ -806,9 +847,9 @@ function AdminAnalytics({ clients, logs, feedbacks }) {
           {clients.map(c => (
             <button key={c.id} onClick={() => setSelectedUserId(c.id)} className={`w-full text-left px-4 py-3 rounded-lg flex items-center space-x-3 ${selectedUserId === c.id ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:bg-zinc-900'}`}>
               <div className="w-6 h-6 rounded-full bg-black border border-zinc-700 flex items-center justify-center overflow-hidden shrink-0">
-                {c.profile?.photo ? <img src={c.profile.photo} className="w-full h-full object-cover"/> : <User size={12}/>}
+                {c.profile?.photo ? <img src={getCleanImgUrl(c.profile.photo)} className="w-full h-full object-cover"/> : <User size={12}/>}
               </div>
-              <span className="truncate text-sm">{c.profile?.firstName ? `${c.profile.firstName} ${c.profile.lastName}` : c.username}</span>
+              <span className="truncate text-sm">{c.profile?.firstName ? `${c.profile.firstName} ${c.profile.lastName}` : c.email}</span>
             </button>
           ))}
         </div>
@@ -889,7 +930,7 @@ function AdminAnalytics({ clients, logs, feedbacks }) {
 }
 
 // --- USER DASHBOARD (WITH BOTTOM NAV) ---
-function UserDashboard({ user, users, exercises, meals, logs, sessionStartTime }) {
+function UserDashboard({ user, exercises, meals, logs, sessionStartTime, db, appId }) {
   const [activeTab, setActiveTab] = useState('home'); 
   const [targetWorkoutCat, setTargetWorkoutCat] = useState(null);
 
@@ -901,11 +942,11 @@ function UserDashboard({ user, users, exercises, meals, logs, sessionStartTime }
   return (
     <>
       <div className="pb-8 animate-in fade-in duration-500">
-        {activeTab === 'home' && <UserHome user={user} logs={logs} exercises={exercises} goToWorkout={goToWorkout} setActiveTab={setActiveTab} sessionStartTime={sessionStartTime} />}
-        {activeTab === 'workouts' && <UserWorkouts exercises={exercises} user={user} preSelectedCategory={targetWorkoutCat} clearSelection={() => setTargetWorkoutCat(null)} appId={appId} db={db} />}
+        {activeTab === 'home' && <UserHome user={user} logs={logs} goToWorkout={goToWorkout} setActiveTab={setActiveTab} sessionStartTime={sessionStartTime} />}
+        {activeTab === 'workouts' && <UserWorkouts exercises={exercises} user={user} preSelectedCategory={targetWorkoutCat} clearSelection={() => setTargetWorkoutCat(null)} db={db} appId={appId} />}
         {activeTab === 'meals' && <UserMeals meals={meals} />}
-        {activeTab === 'journal' && <UserJournal user={user} logs={logs} appId={appId} db={db} />}
-        {activeTab === 'profile' && <UserProfile user={user} logs={logs} appId={appId} db={db} />}
+        {activeTab === 'journal' && <UserJournal user={user} logs={logs} db={db} appId={appId} />}
+        {activeTab === 'profile' && <UserProfile user={user} logs={logs} db={db} appId={appId} />}
       </div>
 
       <div className="fixed bottom-0 left-0 w-full bg-zinc-950/95 backdrop-blur-lg border-t border-zinc-800 pb-safe z-50">
@@ -932,12 +973,11 @@ function UserDashboard({ user, users, exercises, meals, logs, sessionStartTime }
 }
 
 // HOME SCREEN
-function UserHome({ user, logs, exercises, goToWorkout, setActiveTab, sessionStartTime }) {
+function UserHome({ user, logs, goToWorkout, setActiveTab, sessionStartTime }) {
   const [time, setTime] = useState(0);
   const [isActive, setIsActive] = useState(true); 
   const userLogs = logs.filter(l => l.userId === user.id);
 
-  // Check coach note expiration (24 hours = 86400000 ms)
   const isCoachNoteValid = user.coachNote && user.coachNoteTimestamp && (Date.now() - user.coachNoteTimestamp < 86400000);
 
   useEffect(() => {
@@ -963,12 +1003,11 @@ function UserHome({ user, logs, exercises, goToWorkout, setActiveTab, sessionSta
   const dailyCatIndex = (today.getFullYear() + today.getMonth() + today.getDate()) % CATEGORIES.length;
   const dailyCategory = CATEGORIES[dailyCatIndex];
 
-  // Specific dynamic routine mapped uniquely from the Daily Focus
   const fullBodyRoutines = [
-    { title: "Build Muscle", img: "https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?auto=format&fit=crop&w=600&q=80", cat: "Fitness" },
-    { title: "Full Body Power", img: "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=600&q=80", cat: "Crossfit" },
-    { title: "Core Crusher", img: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?auto=format&fit=crop&w=600&q=80", cat: "Functional flow" },
-    { title: "Combat Endurance", img: "https://images.unsplash.com/photo-1599058917212-d750089bc07e?auto=format&fit=crop&w=600&q=80", cat: "Tae bo" }
+    { title: "Build Muscle", img: "[https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?w=800&q=80](https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?w=800&q=80)", cat: "Fitness" },
+    { title: "Full Body Power", img: "[https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=800&q=80](https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=800&q=80)", cat: "Crossfit" },
+    { title: "Core Crusher", img: "[https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800&q=80](https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800&q=80)", cat: "Functional flow" },
+    { title: "Combat Endurance", img: "[https://images.unsplash.com/photo-1599058917212-d750089bc07e?w=800&q=80](https://images.unsplash.com/photo-1599058917212-d750089bc07e?w=800&q=80)", cat: "Tae bo" }
   ];
   const wotd = fullBodyRoutines[(dailyCatIndex + 1) % fullBodyRoutines.length]; 
 
@@ -976,11 +1015,11 @@ function UserHome({ user, logs, exercises, goToWorkout, setActiveTab, sessionSta
     <div className="space-y-6 max-w-md mx-auto w-full pt-2">
       <div className="flex items-center justify-between mb-2 px-2">
         <div>
-          <h1 className="text-2xl font-bold text-white">Hi, {user.profile?.firstName || user.username}</h1>
+          <h1 className="text-2xl font-bold text-white">Hi, {user.profile?.firstName || user.email?.split('@')[0]}</h1>
           <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest">Let's crush it today.</p>
         </div>
         <div className="w-12 h-12 bg-zinc-900 rounded-full border border-zinc-700 overflow-hidden flex items-center justify-center">
-          {user.profile?.photo ? <img src={user.profile.photo} className="w-full h-full object-cover"/> : <User size={20} className="text-zinc-500"/>}
+          {user.profile?.photo ? <img src={getCleanImgUrl(user.profile.photo)} className="w-full h-full object-cover"/> : <User size={20} className="text-zinc-500"/>}
         </div>
       </div>
 
@@ -1009,7 +1048,7 @@ function UserHome({ user, logs, exercises, goToWorkout, setActiveTab, sessionSta
       {/* Daily Focus Box */}
       <div onClick={() => goToWorkout(dailyCategory.name)} className="relative h-32 rounded-2xl overflow-hidden cursor-pointer shadow-lg border border-zinc-800 group">
         <div className="absolute inset-0 bg-black/50 group-hover:bg-black/30 transition-colors z-10"></div>
-        <img src={dailyCategory.img} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+        <img src={getCleanImgUrl(dailyCategory.img)} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
         <div className="absolute inset-0 z-20 flex flex-col justify-center p-6">
           <span className="bg-white text-black text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest w-fit mb-2">Daily Focus</span>
           <h3 className="text-2xl font-bold text-white uppercase tracking-widest drop-shadow-lg">{dailyCategory.name}</h3>
@@ -1018,7 +1057,7 @@ function UserHome({ user, logs, exercises, goToWorkout, setActiveTab, sessionSta
 
       {/* Full Body Power Box */}
       <div className="relative h-40 rounded-2xl overflow-hidden shadow-lg border border-red-900/50 group bg-red-950 flex flex-col justify-end p-5">
-        <img src={wotd.img} className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:scale-105 transition-transform duration-500 mix-blend-overlay" />
+        <img src={getCleanImgUrl(wotd.img)} className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:scale-105 transition-transform duration-500 mix-blend-overlay" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 to-transparent z-10"></div>
         <div className="relative z-20">
           <h3 className="text-2xl font-bold text-white uppercase tracking-widest mb-3">{wotd.title}</h3>
@@ -1060,7 +1099,7 @@ function UserMeals({ meals }) {
             <button onClick={() => setActiveMeal(null)} className="absolute top-6 left-4 z-10 bg-black/50 backdrop-blur-md p-3 rounded-full text-white hover:bg-black/80">
               <ArrowLeft size={20}/>
             </button>
-            <img src={activeMeal.imageUrl} className="w-full h-full object-cover" />
+            <img src={getCleanImgUrl(activeMeal.imageUrl)} className="w-full h-full object-cover" />
             <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent"></div>
             <div className="absolute bottom-6 left-6 right-6">
                <span className="text-emerald-500 text-[10px] font-bold uppercase tracking-widest mb-2 block">{activeMeal.category} Recipe</span>
@@ -1090,7 +1129,7 @@ function UserMeals({ meals }) {
           {categoryMeals.length > 0 ? categoryMeals.map(meal => (
             <div key={meal.id} onClick={() => setActiveMeal(meal)} className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden flex flex-col shadow-xl cursor-pointer hover:border-emerald-500/50 transition-colors group">
                <div className="h-32 w-full bg-zinc-900 relative">
-                  <img src={meal.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"/>
+                  <img src={getCleanImgUrl(meal.imageUrl)} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"/>
                </div>
                <div className="p-4">
                   <h4 className="text-sm font-bold text-white leading-tight">{meal.title}</h4>
@@ -1111,7 +1150,7 @@ function UserMeals({ meals }) {
         {MEAL_CATEGORIES.map(cat => (
           <div key={cat.name} onClick={() => setSelectedCategory(cat.name)} className="relative h-32 rounded-3xl overflow-hidden cursor-pointer shadow-lg border border-zinc-800 group">
             <div className="absolute inset-0 bg-black/60 group-hover:bg-black/40 transition-colors z-10"></div>
-            <img src={cat.img} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+            <img src={getCleanImgUrl(cat.img)} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
             <div className="absolute inset-0 z-20 flex flex-col justify-center p-6 text-left">
               <h3 className="text-xl font-bold text-white uppercase tracking-widest drop-shadow-lg">{cat.name}</h3>
               <div className="text-[10px] font-bold tracking-widest uppercase text-emerald-400 mt-2 flex items-center"><Utensils size={12} className="mr-2"/> View Recipes</div>
@@ -1123,7 +1162,7 @@ function UserMeals({ meals }) {
   );
 }
 
-function UserWorkouts({ exercises, user, preSelectedCategory, clearSelection, appId, db }) {
+function UserWorkouts({ exercises, user, preSelectedCategory, clearSelection, db, appId }) {
   const [selectedCategory, setSelectedCategory] = useState(preSelectedCategory || null);
   const categoryExercises = exercises.filter(e => e.category === selectedCategory);
 
@@ -1139,7 +1178,7 @@ function UserWorkouts({ exercises, user, preSelectedCategory, clearSelection, ap
           <h2 className="text-2xl font-bold text-white uppercase tracking-widest">{selectedCategory}</h2>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-2">
-          {categoryExercises.map(ex => <ExerciseCard key={ex.id} exercise={ex} user={user} appId={appId} db={db} />)}
+          {categoryExercises.map(ex => <ExerciseCard key={ex.id} exercise={ex} user={user} db={db} appId={appId} />)}
         </div>
       </div>
     );
@@ -1152,7 +1191,7 @@ function UserWorkouts({ exercises, user, preSelectedCategory, clearSelection, ap
         {CATEGORIES.map(cat => (
           <div key={cat.name} onClick={() => setSelectedCategory(cat.name)} className="group relative h-40 rounded-3xl overflow-hidden cursor-pointer shadow-lg border border-zinc-800">
             <div className="absolute inset-0 bg-black/60 group-hover:bg-black/40 transition-colors z-10"></div>
-            <img src={cat.img} alt={cat.name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+            <img src={getCleanImgUrl(cat.img)} alt={cat.name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
             <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-6 text-center">
               <h3 className="text-xl font-bold text-white uppercase tracking-widest drop-shadow-lg">{cat.name}</h3>
             </div>
@@ -1163,7 +1202,7 @@ function UserWorkouts({ exercises, user, preSelectedCategory, clearSelection, ap
   );
 }
 
-function ExerciseCard({ exercise, user, appId, db }) {
+function ExerciseCard({ exercise, user, db, appId }) {
   const [sets, setSets] = useState(1);
   const [reps, setReps] = useState(5);
   const [tips, setTips] = useState('');
@@ -1184,7 +1223,7 @@ function ExerciseCard({ exercise, user, appId, db }) {
     try {
       const fbId = `fb_${user.id}_${Date.now()}`;
       await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'samfit_feedbacks', fbId), {
-        id: fbId, userId: user.id, userName: user.username, exerciseId: exercise.id, exerciseTitle: exercise.title, rating, timestamp: Date.now()
+        id: fbId, userId: user.id, userName: user.email || user.username, exerciseId: exercise.id, exerciseTitle: exercise.title, rating, timestamp: Date.now()
       });
       setFeedbackSent(true);
       alert(`Feedback recorded: ${rating}`);
@@ -1262,7 +1301,7 @@ function ExerciseCard({ exercise, user, appId, db }) {
   );
 }
 
-function UserJournal({ user, logs, appId, db }) {
+function UserJournal({ user, logs, db, appId }) {
   const todayDate = new Date().toISOString().split('T')[0];
   const [date, setDate] = useState(todayDate);
   const existingLog = logs.find(l => l.userId === user.id && l.date === date);
@@ -1275,6 +1314,9 @@ function UserJournal({ user, logs, appId, db }) {
 
   const [aiAnalysis, setAiAnalysis] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const isMounted = useRef(true);
+
+  useEffect(() => { return () => { isMounted.current = false; }; }, []);
 
   useEffect(() => {
     setFood(existingLog?.food || ''); setHours(existingLog?.hoursTrained || '');
@@ -1288,7 +1330,7 @@ function UserJournal({ user, logs, appId, db }) {
     const prompt = `Analyze this daily food log: "${food}". Give a brief 3-bullet summary: 1. Quality, 2. Praise, 3. Suggestion.`;
     const response = await generateAIFeedback(prompt, "You are a professional nutritionist. Keep responses concise.");
     setAiAnalysis(response);
-    setIsAnalyzing(false);
+    if(isMounted.current) setIsAnalyzing(false);
   };
 
   const handleSave = async () => {
@@ -1297,12 +1339,12 @@ function UserJournal({ user, logs, appId, db }) {
     try {
       await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'samfit_logs', `log_${user.id}_${date}`), {
         id: `log_${user.id}_${date}`, userId: user.id, date, food, 
-        hoursTrained: Number(hours), water: Number(water), stretch: Number(stretch), sleep: Number(sleep), 
+        hoursTrained: Number(hours) || 0, water: Number(water) || 0, stretch: Number(stretch) || 0, sleep: Number(sleep) || 0, 
         weightLog: user.profile?.weight || 0
       });
       alert('Journal entry safely stored in the cloud.');
     } catch (err) { alert("Error saving: " + err.message); }
-    setIsSaving(false);
+    if(isMounted.current) setIsSaving(false);
   };
 
   return (
@@ -1318,6 +1360,7 @@ function UserJournal({ user, logs, appId, db }) {
              <label className="block text-[10px] font-bold tracking-widest text-zinc-500 uppercase mb-3">Daily Habits</label>
              <div className="grid grid-cols-3 gap-3">
                 <div className="flex flex-col items-center justify-center p-3 rounded-2xl border bg-black border-zinc-800 group focus-within:border-blue-500/50 transition-colors">
+                   <span className="text-[9px] font-bold text-blue-500 uppercase tracking-widest mb-2">Water</span>
                    <Droplets size={20} className="mb-2 text-blue-500"/>
                    <div className="flex items-center text-white font-mono border-b border-zinc-700 focus-within:border-blue-500 pb-1">
                       <input type="number" min="0" step="0.1" value={water} onChange={e => setWater(e.target.value)} placeholder="0" className="w-8 bg-transparent text-center outline-none text-sm"/>
@@ -1325,6 +1368,7 @@ function UserJournal({ user, logs, appId, db }) {
                    </div>
                 </div>
                 <div className="flex flex-col items-center justify-center p-3 rounded-2xl border bg-black border-zinc-800 group focus-within:border-amber-500/50 transition-colors">
+                   <span className="text-[9px] font-bold text-amber-500 uppercase tracking-widest mb-2">Stretch</span>
                    <PersonStanding size={20} className="mb-2 text-amber-500"/>
                    <div className="flex items-center text-white font-mono border-b border-zinc-700 focus-within:border-amber-500 pb-1">
                       <input type="number" min="0" value={stretch} onChange={e => setStretch(e.target.value)} placeholder="0" className="w-8 bg-transparent text-center outline-none text-sm"/>
@@ -1332,6 +1376,7 @@ function UserJournal({ user, logs, appId, db }) {
                    </div>
                 </div>
                 <div className="flex flex-col items-center justify-center p-3 rounded-2xl border bg-black border-zinc-800 group focus-within:border-purple-500/50 transition-colors">
+                   <span className="text-[9px] font-bold text-purple-500 uppercase tracking-widest mb-2">Sleep</span>
                    <Moon size={20} className="mb-2 text-purple-500"/>
                    <div className="flex items-center text-white font-mono border-b border-zinc-700 focus-within:border-purple-500 pb-1">
                       <input type="number" min="0" step="0.5" value={sleep} onChange={e => setSleep(e.target.value)} placeholder="0" className="w-8 bg-transparent text-center outline-none text-sm"/>
@@ -1374,10 +1419,13 @@ function UserJournal({ user, logs, appId, db }) {
   );
 }
 
-function UserProfile({ user, logs, appId, db }) {
+function UserProfile({ user, logs, db, appId }) {
   const [profile, setProfile] = useState({ fitnessGoal: FITNESS_GOALS[0], ...user.profile });
   const [isUpdating, setIsUpdating] = useState(false);
   const fileInputRef = useRef(null);
+  const isMounted = useRef(true);
+
+  useEffect(() => { return () => { isMounted.current = false; }; }, []);
 
   const handleUpdate = async (e) => {
     e.preventDefault();
@@ -1387,7 +1435,7 @@ function UserProfile({ user, logs, appId, db }) {
       await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'samfit_users', user.id), { ...user, profile }, { merge: true });
       alert('Profile synced! Make sure to log your Journal today to chart this weight.');
     } catch (err) { alert("Error updating: " + err.message); }
-    setIsUpdating(false);
+    if(isMounted.current) setIsUpdating(false);
   };
 
   const handlePhotoUpload = async (e) => {
@@ -1418,12 +1466,12 @@ function UserProfile({ user, logs, appId, db }) {
         <div className="flex flex-col items-center mb-8 pt-4">
           <div className="relative group cursor-pointer mb-4" onClick={() => fileInputRef.current?.click()}>
             <div className="w-28 h-28 bg-black rounded-full border-2 border-zinc-700 flex items-center justify-center overflow-hidden relative">
-              {profile.photo ? <img src={profile.photo} className="w-full h-full object-cover" /> : <User size={48} className="text-zinc-700" />}
+              {profile.photo ? <img src={getCleanImgUrl(profile.photo)} className="w-full h-full object-cover" /> : <User size={48} className="text-zinc-700" />}
               <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><Camera size={24} className="text-white"/></div>
             </div>
             <input type="file" accept="image/*" ref={fileInputRef} onChange={handlePhotoUpload} className="hidden" />
           </div>
-          <h3 className="text-2xl font-bold text-white uppercase tracking-widest">{profile.firstName ? `${profile.firstName} ${profile.lastName}` : user.username}</h3>
+          <h3 className="text-2xl font-bold text-white uppercase tracking-widest">{profile.firstName ? `${profile.firstName} ${profile.lastName}` : user.email?.split('@')[0]}</h3>
         </div>
         <form onSubmit={handleUpdate} className="space-y-4">
           
